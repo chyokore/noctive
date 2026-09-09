@@ -47,15 +47,30 @@ async function handlePaperCycle(request: NextRequest) {
   const events = MOCK_EVENTS;
   const generatedReceipts: DecisionReceipt[] = [];
 
-  for (const evt of events) {
-    const market = MOCK_WATCHLIST[evt.affectedSymbol] || MOCK_WATCHLIST['rNVDA'];
-    const decision = await agentEngine.evaluateEventAsync(evt, market, watchlist, INITIAL_RISK_BUDGET);
-    const risk = riskEngine.evaluateRisk(decision, market, INITIAL_RISK_BUDGET);
-    const order = paperExchange.executePaperOrder(decision, market, risk.isApproved);
-    const receipt = receiptGenerator.generateReceipt(evt, market, decision, risk, order);
+  try {
+    for (const evt of events) {
+      const market = MOCK_WATCHLIST[evt.affectedSymbol] || MOCK_WATCHLIST['rNVDA'];
+      const decision = await agentEngine.evaluateEventAsync(evt, market, watchlist, INITIAL_RISK_BUDGET);
+      const risk = riskEngine.evaluateRisk(decision, market, INITIAL_RISK_BUDGET);
+      const order = paperExchange.executePaperOrder(decision, market, risk.isApproved);
+      const receipt = receiptGenerator.generateReceipt(evt, market, decision, risk, order);
 
-    await store.saveReceipt(receipt);
-    generatedReceipts.push(receipt);
+      await store.saveReceipt(receipt);
+      generatedReceipts.push(receipt);
+    }
+  } catch (err: any) {
+    const rawMsg = err.message || 'Unknown database write error';
+    const sanitizedMsg = rawMsg.replace(/postgresql:\/\/[^@]+@/gi, 'postgresql://***:***@');
+    console.error(`[CronPaperCycle] Persistent receipt saving failed: ${sanitizedMsg}`);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: `Persistent receipt saving failed: ${sanitizedMsg}`,
+        storageMode: store.storeType,
+      },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({

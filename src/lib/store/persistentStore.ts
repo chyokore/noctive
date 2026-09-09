@@ -1,5 +1,6 @@
 import { DecisionReceipt, CompetitionLogMetrics } from '@/types/domain';
 import { INITIAL_RECEIPTS } from './noctiveStore';
+import { Client } from 'pg';
 
 export interface ILedgerStore {
   storeType: 'LOCAL_FILE' | 'POSTGRES_DB' | 'MEMORY_FALLBACK';
@@ -14,6 +15,12 @@ export interface LedgerStoreInfo {
   description: string;
   isVercel: boolean;
   hasDbUrl: boolean;
+}
+
+function sanitizeDbError(err: any): string {
+  if (!err) return 'Unknown database error';
+  const msg = err.message || String(err);
+  return msg.replace(/postgresql:\/\/[^@]+@/gi, 'postgresql://***:***@');
 }
 
 export function getLedgerStoreInfo(): LedgerStoreInfo {
@@ -126,29 +133,35 @@ export class DatabaseLedgerStore implements ILedgerStore {
 
   public async getReceipts(): Promise<DecisionReceipt[]> {
     if (typeof window === 'undefined') {
+      let client: Client | null = null;
       try {
-        const pgMod = 'pg';
-        const { Client } = eval('require')(pgMod);
-        const client = new Client({ connectionString: this.connectionString });
+        client = new Client({ connectionString: this.connectionString });
         await client.connect();
         const res = await client.query('SELECT payload FROM decision_receipts ORDER BY timestamp DESC');
         await client.end();
         if (res.rows && res.rows.length > 0) {
           return res.rows.map((row: any) => row.payload);
         }
+        return [];
       } catch (err: any) {
-        console.warn(`[DatabaseLedgerStore] DB query failed, falling back to local store: ${err.message}`);
+        const sanitized = sanitizeDbError(err);
+        console.error(`[DatabaseLedgerStore] Persistent database query failed: ${sanitized}`);
+        if (client) {
+          try {
+            await client.end();
+          } catch {}
+        }
+        throw new Error(`Persistent database query failed: ${sanitized}`);
       }
     }
-    return new LocalFileLedgerStore().getReceipts();
+    return [];
   }
 
   public async saveReceipt(receipt: DecisionReceipt): Promise<void> {
     if (typeof window === 'undefined') {
+      let client: Client | null = null;
       try {
-        const pgMod = 'pg';
-        const { Client } = eval('require')(pgMod);
-        const client = new Client({ connectionString: this.connectionString });
+        client = new Client({ connectionString: this.connectionString });
         await client.connect();
         await client.query(`
           CREATE TABLE IF NOT EXISTS decision_receipts (
@@ -167,10 +180,16 @@ export class DatabaseLedgerStore implements ILedgerStore {
         await client.end();
         return;
       } catch (err: any) {
-        console.warn(`[DatabaseLedgerStore] DB save failed: ${err.message}`);
+        const sanitized = sanitizeDbError(err);
+        console.error(`[DatabaseLedgerStore] Persistent database write failed: ${sanitized}`);
+        if (client) {
+          try {
+            await client.end();
+          } catch {}
+        }
+        throw new Error(`Persistent database write failed: ${sanitized}`);
       }
     }
-    await new LocalFileLedgerStore().saveReceipt(receipt);
   }
 
   public async getCompetitionMetrics(isDemoFilter: boolean = false): Promise<CompetitionLogMetrics> {

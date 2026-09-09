@@ -88,9 +88,39 @@ describe('Deployment Readiness & Cron Security', () => {
       expect(data.success).toBe(false);
       expect(data.error).toContain('DATABASE_URL environment variable is required');
     });
+
+    it('should RETURN HTTP 500 when persistent database write fails during paper cycle', async () => {
+      process.env.CRON_SECRET = 'valid-secret';
+      process.env.DATABASE_URL = 'postgresql://invalid_user:invalid_pass@127.0.0.1:54321/invalid_db';
+      delete process.env.VERCEL;
+
+      const req = new NextRequest('http://localhost:3000/api/cron/paper-cycle', {
+        method: 'GET',
+        headers: {
+          authorization: 'Bearer valid-secret',
+        },
+      });
+
+      const response = await cronHandler(req);
+      const data = await response.json();
+
+      expect(response.status).toBe(500);
+      expect(data.success).toBe(false);
+      expect(data.error).toContain('Persistent receipt saving failed');
+    });
   });
 
-  describe('Ledger Store Selection Logic', () => {
+  describe('Ledger Store & Package Dependencies', () => {
+    it('should include pg as a production dependency in package.json', () => {
+      const fs = require('fs');
+      const path = require('path');
+      const pkgPath = path.join(process.cwd(), 'package.json');
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+
+      expect(pkg.dependencies).toBeDefined();
+      expect(pkg.dependencies.pg).toBeDefined();
+    });
+
     it('should select LocalFileLedgerStore when DATABASE_URL is missing in local environment', () => {
       delete process.env.DATABASE_URL;
       delete process.env.VERCEL;
@@ -114,6 +144,17 @@ describe('Deployment Readiness & Cron Security', () => {
       expect(info.storeType).toBe('POSTGRES_DB');
       expect(info.isPersistent).toBe(true);
       expect(info.hasDbUrl).toBe(true);
+    });
+
+    it('should throw sanitized error on DatabaseLedgerStore write failure', async () => {
+      const invalidStore = new DatabaseLedgerStore('postgresql://invalid_user:invalid_pass@127.0.0.1:54321/invalid_db');
+      const mockReceipt: any = {
+        receiptId: 'rcpt-fail-test',
+        timestamp: new Date().toISOString(),
+        isDemoData: false,
+      };
+
+      await expect(invalidStore.saveReceipt(mockReceipt)).rejects.toThrow('Persistent database write failed');
     });
 
     it('should flag MEMORY_FALLBACK as non-persistent when running on Vercel without DATABASE_URL', () => {
