@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# Testing & Next.js Build
+/.next/
+/out/
+/coverage/
+*.log
+
+# Environment variables & Secrets (CRITICAL)
+.env
+.env*
+!.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Durable Local Data, Ledgers & Logs
+.data/
+paper_ledger.json
+*.log
+.nx/
+.turbo/
+
+# Generated Screenshots & Scratch Files
+docs/screenshots/*.png
+scratch/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
