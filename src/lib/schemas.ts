@@ -152,3 +152,58 @@ export const RiskBudgetConfigSchema = z.object({
   cooldownMinutes: z.number().nonnegative(),
   lastTradeTimestamp: z.string().optional(),
 });
+
+// UTA Sentinel Schemas
+export const MarginBufferStatusSchema = z.enum(['HEALTHY', 'CAUTION', 'CRITICAL']);
+export const SentinelRecommendationActionSchema = z.enum(['HOLD_MONITOR', 'REDUCE_FUTURES_RISK', 'PROTECT_MARGIN_STAND_DOWN']);
+
+export const SimulatedRTokenPositionSchema = z.object({
+  symbol: z.string().min(1),
+  name: z.string().min(1),
+  quantityTokens: z.number().positive(),
+  markPriceUsd: z.number().positive(),
+  haircutPct: z.number().min(0).max(100),
+  collateralRatioPct: z.number().min(0).max(100),
+});
+
+export const SimulatedUsdtCashSchema = z.object({
+  amountUsd: z.number().nonnegative(),
+});
+
+export const SimulatedFuturesPositionSchema = z.object({
+  symbol: z.string().min(1),
+  positionSizeUsd: z.number().positive(),
+  leverageX: z.number().positive(),
+  maintenanceMarginReqUsd: z.number().positive(),
+});
+
+export const CollateralPolicyConfigSchema = z.object({
+  policyVersion: z.string().min(1),
+  scenarioAssumptionsVersion: z.string().min(1),
+  illustrativeHaircutPct: z.number().min(0).max(100),
+  illustrativeCollateralRatioPct: z.number().min(0).max(100),
+  cautionCoverageThreshold: z.number().positive(),
+  criticalCoverageThreshold: z.number().positive(),
+});
+
+export const CollateralShockAssessmentSchema = z.object({
+  preShockCollateralValueUsd: z.number().nonnegative(),
+  preShockAdjustedCollateralUsd: z.number().nonnegative(),
+  preShockTotalCollateralUsd: z.number().nonnegative(),
+  eventShockPct: z.number(),
+  stressedRTokenPriceUsd: z.number().nonnegative(),
+  stressedCollateralValueUsd: z.number().nonnegative(),
+  stressedAdjustedCollateralUsd: z.number().nonnegative(),
+  stressedTotalCollateralUsd: z.number().nonnegative(),
+  collateralValueLostUsd: z.number().nonnegative(),
+  maintenanceMarginRequirementUsd: z.number().positive(),
+  preShockMarginCoverageRatio: z.number().nonnegative(),
+  postShockMarginCoverageRatio: z.number().nonnegative(),
+  marginBufferStatus: MarginBufferStatusSchema,
+  recommendation: SentinelRecommendationActionSchema,
+  recommendationSummary: z.string().min(1),
+  rationale: z.array(z.string()),
+  assumptionsDisclaimer: z.string().min(1),
+  timestamp: z.string(),
+});
+

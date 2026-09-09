@@ -188,3 +188,76 @@ export interface CompetitionLogMetrics {
   cumulativePnlUsd: number;
   maxDrawdownPct: number;
 }
+
+// ============================================================================
+// UTA SENTINEL DOMAIN TYPES & SCHEMAS
+// ============================================================================
+
+export type MarginBufferStatus = 'HEALTHY' | 'CAUTION' | 'CRITICAL';
+export type SentinelRecommendationAction = 'HOLD_MONITOR' | 'REDUCE_FUTURES_RISK' | 'PROTECT_MARGIN_STAND_DOWN';
+
+export interface SimulatedRTokenPosition {
+  symbol: string;
+  name: string;
+  quantityTokens: number;
+  markPriceUsd: number;
+  haircutPct: number;
+  collateralRatioPct: number;
+}
+
+export interface SimulatedUsdtCash {
+  amountUsd: number;
+}
+
+export interface SimulatedFuturesPosition {
+  symbol: string;
+  positionSizeUsd: number;
+  leverageX: number;
+  maintenanceMarginReqUsd: number;
+}
+
+export interface CollateralPolicyConfig {
+  policyVersion: string;
+  scenarioAssumptionsVersion: string;
+  illustrativeHaircutPct: number;
+  illustrativeCollateralRatioPct: number;
+  cautionCoverageThreshold: number;
+  criticalCoverageThreshold: number;
+}
+
+export interface CollateralShockAssessment {
+  preShockCollateralValueUsd: number;
+  preShockAdjustedCollateralUsd: number;
+  preShockTotalCollateralUsd: number;
+  eventShockPct: number;
+  stressedRTokenPriceUsd: number;
+  stressedCollateralValueUsd: number;
+  stressedAdjustedCollateralUsd: number;
+  stressedTotalCollateralUsd: number;
+  collateralValueLostUsd: number;
+  maintenanceMarginRequirementUsd: number;
+  preShockMarginCoverageRatio: number;
+  postShockMarginCoverageRatio: number;
+  marginBufferStatus: MarginBufferStatus;
+  recommendation: SentinelRecommendationAction;
+  recommendationSummary: string;
+  rationale: string[];
+  assumptionsDisclaimer: string;
+  timestamp: string;
+}
+
+export interface UTASentinelScenario {
+  id: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  isHighImpact: boolean;
+  event: EventItem;
+  rTokenPosition: SimulatedRTokenPosition;
+  usdtCash: SimulatedUsdtCash;
+  futuresPosition: SimulatedFuturesPosition;
+  policyConfig: CollateralPolicyConfig;
+  expectedBufferStatus: MarginBufferStatus;
+  expectedRecommendation: SentinelRecommendationAction;
+}
+

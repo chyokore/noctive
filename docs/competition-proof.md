@@ -29,6 +29,7 @@
 | **Deterministic Risk Engine** | **LIVE** | 8-Gate independent risk validation engine (`riskEngine.ts`) enforcing max drawdown, position size limits, spread thresholds, and liquidity constraints. Final authority over paper orders. |
 | **Receipt & Provenance Generator** | **LIVE** | Immutable decision receipt generator (`receiptGenerator.ts`) producing verifiable SHA-256 hashes, timestamps, and full Decision Authority summaries. |
 | **Ledger Storage** | **LIVE LOCAL / DEV DB** | `LocalFileLedgerStore` persisting entries to `.data/paper_ledger.json`. `DatabaseLedgerStore` with PostgreSQL migration script (`scripts/init-db.sql`) configured for `DATABASE_URL` (development-only until live DB is connected). |
+| **UTA Collateral Sentinel** | **LIVE DETERMINISTIC** | Pure deterministic collateral shock engine (`collateralShockEngine.ts`) calculating pre/post-shock margin coverage ratios and margin buffer classification (`HEALTHY`, `CAUTION`, `CRITICAL`) under illustrative assumptions. |
 | **Market Data Adapter** | **SIMULATED** | `MockMarketDataProvider` simulating overnight rToken bid/ask spreads, liquidity indices, and prices. |
 | **Order Execution** | **PAPER TRADING ONLY** | Paper order creation only. Zero real-money trading, zero wallet connections, zero live exchange API order routing. |
 

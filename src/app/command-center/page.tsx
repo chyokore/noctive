@@ -107,7 +107,7 @@ export default function CommandCenterPage() {
             </span>
           </div>
           <p className="text-xs text-slate-400 font-mono mt-1">
-            Real-time event evidence evaluation, deterministic risk verification, and paper order management.
+            Collateral-aware overnight risk intelligence for rTokens, deterministic risk verification, and paper order execution.
           </p>
         </div>
 
@@ -125,6 +125,34 @@ export default function CommandCenterPage() {
             <span className="text-electric-400 font-bold block">7 rToken Symbols</span>
           </div>
         </div>
+      </div>
+
+      {/* Compact UTA Collateral Sentinel Alert Panel */}
+      <div className="bg-navy-900/90 border border-amber-500/30 p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 font-mono text-xs">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+            <Zap className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-sm text-white font-sans">UTA Sentinel Collateral Intelligence</span>
+              <span className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold">
+                CAUTION BUFFER (1.51x)
+              </span>
+            </div>
+            <p className="text-slate-400 text-xs mt-1">
+              Overnight rNVDA price shock (-15.0%) erodes simulated collateral value by -$3,120. Active BTCUSDT futures position requires risk reduction.
+            </p>
+          </div>
+        </div>
+
+        <Link
+          href="/uta-sentinel"
+          className="px-4 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center gap-2 transition-all whitespace-nowrap"
+        >
+          <span>View UTA Sentinel</span>
+          <ArrowUpRight className="w-4 h-4" />
+        </Link>
       </div>
 
       {/* Main Grid: Event Feed vs Agent Live Evaluation */}

@@ -43,11 +43,19 @@ export default function LandingPage() {
           </h1>
 
           <p className="text-base sm:text-lg text-slate-300 leading-relaxed font-sans max-w-3xl">
-            <strong>Noctive</strong> operates during traditional US market closures. When overnight macro, earnings, or regulatory events strike 24/7 tokenized equity markets (rTokens), Noctive determines whether an overnight price movement reflects <strong>meaningful price discovery</strong> or <strong>low-liquidity noise</strong>.
+            <strong>Noctive</strong> is a collateral-aware overnight risk intelligence agent for tokenized US equities (rTokens). Operating during traditional US market closures, Noctive determines whether an overnight price movement reflects <strong>meaningful price discovery</strong> or <strong>low-liquidity noise</strong>, protecting simulated portfolio margin support before market open.
           </p>
 
           {/* Action CTAs */}
           <div className="flex flex-wrap items-center gap-4 pt-2">
+            <Link
+              href="/uta-sentinel"
+              className="px-6 py-3.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-mono text-sm font-bold flex items-center gap-2 shadow-[0_0_20px_rgba(245,158,11,0.2)] transition-all hover:scale-105"
+            >
+              <span>Explore UTA Sentinel</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+
             <Link
               href="/command-center"
               className="px-6 py-3.5 rounded-xl bg-electric-600 hover:bg-electric-500 text-white font-mono text-sm font-semibold flex items-center gap-2 shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all hover:scale-105"

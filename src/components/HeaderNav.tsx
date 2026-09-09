@@ -51,7 +51,7 @@ export const HeaderNav: React.FC = () => {
                   <span className="font-sans font-bold text-lg text-white tracking-tight">NOCTIVE</span>
                   <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-electric-500/10 text-electric-400 border border-electric-500/20">v1.0</span>
                 </div>
-                <p className="text-[10px] text-slate-400 font-mono hidden sm:block">rToken Overnight Agent</p>
+                <p className="text-[10px] text-slate-400 font-mono hidden sm:block">Collateral-Aware Overnight Risk Intelligence</p>
               </div>
             </Link>
 
@@ -63,6 +63,17 @@ export const HeaderNav: React.FC = () => {
 
           {/* Nav Links */}
           <nav className="hidden md:flex items-center space-x-1">
+            <Link
+              href="/uta-sentinel"
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-mono font-bold transition-all ${
+                pathname === '/uta-sentinel'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
+                  : 'text-amber-400 hover:text-amber-300 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20'
+              }`}
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+              <span>UTA Sentinel</span>
+            </Link>
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.path || (item.path !== '/' && pathname.startsWith(item.path));
