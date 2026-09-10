@@ -104,11 +104,33 @@ export interface PaperOrder {
   timestamp: string;
 }
 
+export interface ExternalInputProvenance {
+  sourceUrl: string;
+  publisherName: string;
+  retrievedAtTimestamp: string;
+  publishedAtTimestamp?: string;
+  symbolMapping?: string;
+  contentHash: string;
+  dataMode: 'LIVE_EXTERNAL' | 'DEMO_DATA';
+}
+
+export interface LivePipelineStatus {
+  lastRunTimestamp: string;
+  eventsFetched: number;
+  marketPricesFetched: number;
+  status: 'HEALTHY' | 'DEGRADED' | 'NO_QUALIFYING_EVENTS' | 'FAILED';
+  lastSourceUrl?: string;
+  message: string;
+  activeEventSources: string[];
+  activeMarketSources: string[];
+}
+
 export interface DataProvenance {
-  dataMode: 'DEMO_DATA' | 'MOCK_MARKET_ADAPTER' | 'QWEN_CONNECTED';
+  dataMode: 'DEMO_DATA' | 'MOCK_MARKET_ADAPTER' | 'QWEN_CONNECTED' | 'LIVE_EXTERNAL';
   marketSource: string;
   llmSource: string;
   isDemoData: boolean;
+  externalProvenance?: ExternalInputProvenance;
 }
 
 export interface DecisionAuthoritySummary {

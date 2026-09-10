@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "cycle": "npx tsx scripts/run-paper-cycle.ts"
+    "cycle": "npx tsx scripts/run-paper-cycle.ts",
+    "cycle:live": "npx tsx scripts/run-live-competition-cycle.ts"
   },
   "dependencies": {
     "clsx": "^2.1.0",

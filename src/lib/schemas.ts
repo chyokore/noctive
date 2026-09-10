@@ -107,11 +107,33 @@ export const PaperOrderSchema = z.object({
   timestamp: z.string(),
 });
 
+export const ExternalInputProvenanceSchema = z.object({
+  sourceUrl: z.string().min(1),
+  publisherName: z.string().min(1),
+  retrievedAtTimestamp: z.string(),
+  publishedAtTimestamp: z.string().optional(),
+  symbolMapping: z.string().optional(),
+  contentHash: z.string().min(1),
+  dataMode: z.enum(['LIVE_EXTERNAL', 'DEMO_DATA']),
+});
+
+export const LivePipelineStatusSchema = z.object({
+  lastRunTimestamp: z.string(),
+  eventsFetched: z.number().int().nonnegative(),
+  marketPricesFetched: z.number().int().nonnegative(),
+  status: z.enum(['HEALTHY', 'DEGRADED', 'NO_QUALIFYING_EVENTS', 'FAILED']),
+  lastSourceUrl: z.string().optional(),
+  message: z.string(),
+  activeEventSources: z.array(z.string()),
+  activeMarketSources: z.array(z.string()),
+});
+
 export const DataProvenanceSchema = z.object({
-  dataMode: z.enum(['DEMO_DATA', 'MOCK_MARKET_ADAPTER', 'QWEN_CONNECTED']),
+  dataMode: z.enum(['DEMO_DATA', 'MOCK_MARKET_ADAPTER', 'QWEN_CONNECTED', 'LIVE_EXTERNAL']),
   marketSource: z.string(),
   llmSource: z.string(),
   isDemoData: z.boolean(),
+  externalProvenance: ExternalInputProvenanceSchema.optional(),
 });
 
 export const DecisionAuthoritySummarySchema = z.object({

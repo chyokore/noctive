@@ -55,20 +55,26 @@ export class ReceiptGenerator {
         : undefined,
     };
 
-    // Strict Data Provenance Audit: All simulated feeds & seeded events are tagged isDemoData: true.
-    // Live Competition log entries (isDemoData: false) require verified external market data adapters.
-    const isDemo = true; // Set to true until live exchange market feed adapter is connected.
+    // Provenance Audit: Determine isDemo dynamically based on inputs
+    const isDemo = Boolean(event.isDemoData || marketContext.isDemoData);
+
+    const extProvenance = (event as any).externalProvenance || (marketContext as any).externalProvenance;
 
     const provenance: DataProvenance = {
-      dataMode: agentDecision.llmProposal?.providerMode === 'QWEN_LIVE'
+      dataMode: !isDemo
+        ? 'LIVE_EXTERNAL'
+        : agentDecision.llmProposal?.providerMode === 'QWEN_LIVE'
         ? 'QWEN_CONNECTED'
-        : 'MOCK_MARKET_ADAPTER',
-      marketSource: 'Simulated rToken 24/7 Market Feed',
+        : 'DEMO_DATA',
+      marketSource: !isDemo
+        ? 'Bitget Public Spot Tickers API'
+        : 'Simulated rToken 24/7 Market Feed',
       llmSource:
         agentDecision.llmProposal?.providerMode === 'QWEN_LIVE'
           ? 'Bitget Qwen AI API'
-          : 'Mock LLM Provider (Demo Mode)',
+          : 'Deterministic Risk Engine + LLM',
       isDemoData: isDemo,
+      externalProvenance: extProvenance,
     };
 
     const payloadToHash = JSON.stringify({

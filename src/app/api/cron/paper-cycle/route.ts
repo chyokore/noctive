@@ -4,8 +4,8 @@ import { RiskEngine } from '@/lib/engine/riskEngine';
 import { PaperExchange } from '@/lib/engine/paperExchange';
 import { ReceiptGenerator } from '@/lib/engine/receiptGenerator';
 import { getLedgerStore } from '@/lib/store/persistentStore';
-import { MOCK_EVENTS } from '@/lib/adapters/eventProvider';
-import { MOCK_WATCHLIST } from '@/lib/adapters/marketDataProvider';
+import { LiveEventProvider } from '@/lib/adapters/liveEventProvider';
+import { LiveMarketDataProvider } from '@/lib/adapters/liveMarketDataProvider';
 import { INITIAL_RISK_BUDGET } from '@/lib/store/noctiveStore';
 import { DecisionReceipt } from '@/types/domain';
 
@@ -43,13 +43,31 @@ async function handlePaperCycle(request: NextRequest) {
   const receiptGenerator = new ReceiptGenerator();
   const store = getLedgerStore();
 
-  const watchlist = Object.values(MOCK_WATCHLIST);
-  const events = MOCK_EVENTS;
+  const liveEventProvider = new LiveEventProvider();
+  const liveMarketProvider = new LiveMarketDataProvider();
+
+  const events = await liveEventProvider.getLatestEvents();
+  const watchlist = await liveMarketProvider.getWatchlist();
+
+  // Fail-closed requirement: If no qualifying live external events or market data available, do not create fake records
+  if (events.length === 0 || watchlist.length === 0) {
+    console.log('[CronPaperCycle] No qualifying live external events or market data retrieved today. Fail-closed: 0 competition receipts created.');
+    return NextResponse.json({
+      success: true,
+      skipped: true,
+      reason: 'No qualifying live-source external events or market tickers retrieved today (fail-closed operational rule).',
+      pipelineStatus: 'NO_QUALIFYING_EVENTS',
+      cyclesExecuted: 0,
+      storeType: store.storeType,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   const generatedReceipts: DecisionReceipt[] = [];
 
   try {
     for (const evt of events) {
-      const market = MOCK_WATCHLIST[evt.affectedSymbol] || MOCK_WATCHLIST['rNVDA'];
+      const market = watchlist.find((m) => m.symbol === evt.affectedSymbol) || watchlist[0];
       const decision = await agentEngine.evaluateEventAsync(evt, market, watchlist, INITIAL_RISK_BUDGET);
       const risk = riskEngine.evaluateRisk(decision, market, INITIAL_RISK_BUDGET);
       const order = paperExchange.executePaperOrder(decision, market, risk.isApproved);
@@ -75,7 +93,7 @@ async function handlePaperCycle(request: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    message: 'Scheduled autonomous paper trading cycle completed successfully.',
+    message: 'Scheduled live autonomous paper trading cycle completed successfully.',
     safeMode: true,
     paperTradingOnly: true,
     providerMode: agentEngine.getProviderMode(),
@@ -94,4 +112,3 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return handlePaperCycle(request);
 }
-

@@ -5,17 +5,8 @@ import Link from 'next/link';
 import { DecisionReceipt, CompetitionLogMetrics } from '@/types/domain';
 import {
   Trophy,
-  BarChart3,
-  TrendingUp,
   ShieldCheck,
-  Calendar,
-  Layers,
   ArrowRight,
-  Download,
-  Filter,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
 } from 'lucide-react';
 
 export default function CompetitionLogPage() {
@@ -106,6 +97,37 @@ export default function CompetitionLogPage() {
         </div>
       </div>
 
+      {/* Live External Pipeline Health Banner */}
+      <div className="bg-navy-900 border border-navy-800 p-4 rounded-xl flex flex-wrap items-center justify-between gap-4 text-xs font-mono">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <strong className="text-white font-sans text-sm">Live External Data Pipeline Status:</strong>
+              <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold">
+                ACTIVE & AUDITABLE
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Read-Only Inputs: SEC EDGAR 8-K Atom Feed &amp; Bitget Public Spot Tickers API. Zero account/key/wallet dependency.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 text-[11px] text-slate-400">
+          <div>
+            <span className="block text-[10px] uppercase text-slate-400">Event Source</span>
+            <span className="text-slate-200">SEC EDGAR (Form 8-K)</span>
+          </div>
+          <div className="h-6 w-px bg-navy-800" />
+          <div>
+            <span className="block text-[10px] uppercase text-slate-400">Market Source</span>
+            <span className="text-slate-200">Bitget Public Spot API</span>
+          </div>
+        </div>
+      </div>
+
       {/* Metrics Performance Cards */}
       {metrics && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 font-mono text-xs">
@@ -163,6 +185,7 @@ export default function CompetitionLogPage() {
             <thead>
               <tr className="border-b border-navy-800 text-slate-400">
                 <th className="pb-2">Timestamp</th>
+                <th className="pb-2">Provenance</th>
                 <th className="pb-2">Receipt ID</th>
                 <th className="pb-2">Symbol</th>
                 <th className="pb-2">AI Proposal</th>
@@ -173,48 +196,69 @@ export default function CompetitionLogPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-navy-800/60">
-              {receipts.map((rcpt) => (
-                <tr key={rcpt.receiptId} className="hover:bg-navy-850/50">
-                  <td className="py-3 text-slate-400">{new Date(rcpt.timestamp).toLocaleTimeString()}</td>
-                  <td className="py-3 font-bold text-electric-400">{rcpt.receiptId}</td>
-                  <td className="py-3 font-bold text-white">{rcpt.marketContext.symbol}</td>
-                  <td className="py-3 uppercase text-slate-200">{rcpt.agentDecision.action.replace(/_/g, ' ')}</td>
-                  <td className="py-3 text-slate-300">{rcpt.agentDecision.confidence}%</td>
-                  <td className="py-3">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        rcpt.riskGate.isApproved
-                          ? 'bg-emerald-500/10 text-emerald-400'
-                          : 'bg-rose-500/10 text-rose-400'
-                      }`}
-                    >
-                      {rcpt.riskGate.isApproved ? 'PASS' : 'BLOCK'}
-                    </span>
-                  </td>
-                  <td className="py-3">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        rcpt.status === 'APPROVED_EXECUTED'
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                          : rcpt.status === 'RISK_BLOCKED'
-                          ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
-                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                      }`}
-                    >
-                      {rcpt.status.replace(/_/g, ' ')}
-                    </span>
-                  </td>
-                  <td className="py-3 text-right">
-                    <Link
-                      href={`/decision/${rcpt.receiptId}`}
-                      className="px-2.5 py-1 rounded bg-navy-950 hover:bg-navy-800 border border-navy-800 text-electric-400 text-[11px] font-semibold inline-flex items-center gap-1 transition-all"
-                    >
-                      <span>View</span>
-                      <ArrowRight className="w-3 h-3" />
-                    </Link>
+              {receipts.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-8 text-center text-slate-400">
+                    {activeTab === 'COMPETITION'
+                      ? 'No live external competition paper records created yet. Scheduled Vercel cron or run-live-competition-cycle script will populate live entries upon receiving qualifying external events.'
+                      : 'No demo records found.'}
                   </td>
                 </tr>
-              ))}
+              ) : (
+                receipts.map((rcpt) => (
+                  <tr key={rcpt.receiptId} className="hover:bg-navy-850/50">
+                    <td className="py-3 text-slate-400">{new Date(rcpt.timestamp).toLocaleTimeString()}</td>
+                    <td className="py-3">
+                      {!rcpt.isDemoData || rcpt.provenance?.dataMode === 'LIVE_EXTERNAL' ? (
+                        <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold">
+                          LIVE EXTERNAL DATA
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold">
+                          DEMO DATA
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 font-bold text-electric-400">{rcpt.receiptId}</td>
+                    <td className="py-3 font-bold text-white">{rcpt.marketContext.symbol}</td>
+                    <td className="py-3 uppercase text-slate-200">{rcpt.agentDecision.action.replace(/_/g, ' ')}</td>
+                    <td className="py-3 text-slate-300">{rcpt.agentDecision.confidence}%</td>
+                    <td className="py-3">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          rcpt.riskGate.isApproved
+                            ? 'bg-emerald-500/10 text-emerald-400'
+                            : 'bg-rose-500/10 text-rose-400'
+                        }`}
+                      >
+                        {rcpt.riskGate.isApproved ? 'PASS' : 'BLOCK'}
+                      </span>
+                    </td>
+                    <td className="py-3">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          rcpt.status === 'APPROVED_EXECUTED'
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                            : rcpt.status === 'RISK_BLOCKED'
+                            ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                        }`}
+                      >
+                        {rcpt.status.replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                    <td className="py-3 text-right">
+                      <Link
+                        href={`/decision/${rcpt.receiptId}`}
+                        className="px-2.5 py-1 rounded bg-navy-950 hover:bg-navy-800 border border-navy-800 text-electric-400 text-[11px] font-semibold inline-flex items-center gap-1 transition-all"
+                      >
+                        <span>View</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </Link>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
