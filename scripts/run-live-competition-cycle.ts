@@ -20,6 +20,7 @@ if (fs.existsSync(envLocalPath)) {
 
 import { LiveEventProvider, LiveEventItemWithProvenance } from '../src/lib/adapters/liveEventProvider';
 import { LiveMarketDataProvider, MarketContextWithProvenance, RTOKEN_EQUITY_MAPPINGS } from '../src/lib/adapters/liveMarketDataProvider';
+import { StooqMarketDataProvider, STOCK_REFERENCE_MAPPINGS } from '../src/lib/adapters/stooqMarketDataProvider';
 import { AgentEngine } from '../src/lib/engine/agentEngine';
 import { RiskEngine } from '../src/lib/engine/riskEngine';
 import { PaperExchange } from '../src/lib/engine/paperExchange';
@@ -45,13 +46,14 @@ async function runLiveCompetitionCycle() {
 
   const liveEventProvider = new LiveEventProvider();
   const liveMarketProvider = new LiveMarketDataProvider();
+  const stooqMarketProvider = new StooqMarketDataProvider();
 
   console.log(`LLM Provider Mode: ${agentEngine.getProviderMode()}`);
   console.log(`LLM Provider Name: ${agentEngine.getProviderName()}`);
   console.log(`Store Type: ${store.storeType}`);
 
   console.log('\nQuerying Bitget public API for verified exchange market symbols (NVDAUSDT, AAPLUSDT, MSFTUSDT, TSLAUSDT, SPYUSDT, QQQUSDT)...');
-  const watchlist = await liveMarketProvider.getWatchlist();
+  let watchlist = await liveMarketProvider.getWatchlist();
 
   console.log('\nExchange Market Symbol Resolution Results:');
   Object.values(RTOKEN_EQUITY_MAPPINGS).forEach((mapping) => {
@@ -59,9 +61,26 @@ async function runLiveCompetitionCycle() {
     if (found) {
       console.log(`  ✅ ${mapping.rToken} -> ${mapping.exchangeMarketSymbol}: CONFIRMED ($${found.currentPrice})`);
     } else {
-      console.log(`  🛑 ${mapping.rToken} -> ${mapping.exchangeMarketSymbol}: NOT LISTED ON BITGET`);
+      console.log(`  🛑 ${mapping.rToken} -> ${mapping.exchangeMarketSymbol}: NOT LISTED ON BITGET SPOT`);
     }
   });
+
+  let marketProviderDomain = 'api.bitget.com';
+
+  if (watchlist.length === 0) {
+    console.log('\nFallback: Querying Stooq for underlying stock reference prices (NVDA.US, AAPL.US, MSFT.US, TSLA.US, SPY.US, QQQ.US)...');
+    watchlist = await stooqMarketProvider.getWatchlist();
+    if (watchlist.length > 0) {
+      marketProviderDomain = 'stooq.com';
+      console.log('Underlying Stock Reference Quotes Retrieved from Stooq:');
+      Object.values(STOCK_REFERENCE_MAPPINGS).forEach((mapping) => {
+        const found = watchlist.find((m) => m.symbol === mapping.rToken);
+        if (found) {
+          console.log(`  📈 ${mapping.issuerTicker} (${mapping.underlyingStockSymbol}) -> ${mapping.rToken}: $${found.currentPrice} (Data Mode: LIVE_EXTERNAL_UNDERLYING_REFERENCE)`);
+        }
+      });
+    }
+  }
 
   console.log('\nFetching live primary events from SEC EDGAR RSS feed...');
   const events = await liveEventProvider.getLatestEvents();
@@ -82,6 +101,7 @@ async function runLiveCompetitionCycle() {
       qwenInvoked: false,
       decisionCreated: false,
       safeSkipReason: NO_MARKET_SKIP_REASON,
+      marketProviderDomain,
     });
     await store.saveRunAudit(audit);
 
@@ -100,12 +120,17 @@ async function runLiveCompetitionCycle() {
 
   for (const evt of events) {
     const liveEvt = evt as LiveEventItemWithProvenance;
-    const market = watchlist.find((m) => m.symbol === evt.affectedSymbol) as MarketContextWithProvenance | undefined;
+    const market = watchlist.find((m) => m.symbol === evt.affectedSymbol) as (MarketContextWithProvenance & { underlyingStockSymbol?: string }) | undefined;
 
     console.log(`\n----------------------------------------------------`);
     console.log(`Mapped SEC Issuer Ticker: ${liveEvt.issuerTicker || 'N/A'}`);
     console.log(`Mapped Conceptual rToken: ${evt.affectedSymbol}`);
-    console.log(`Confirmed Bitget Market Symbol: ${market?.confirmedMarketSymbol || 'NOT_FOUND_ON_BITGET'}`);
+    console.log(`Market Reference Domain: ${marketProviderDomain}`);
+    if (market?.confirmedMarketSymbol) {
+      console.log(`Bitget Live Market Symbol: ${market.confirmedMarketSymbol}`);
+    } else if (market?.underlyingStockSymbol) {
+      console.log(`Stooq Stock Reference Symbol: ${market.underlyingStockSymbol}`);
+    }
 
     if (!market) {
       const audit = createRunAuditRecord({
@@ -117,6 +142,7 @@ async function runLiveCompetitionCycle() {
         safeSkipReason: NO_MARKET_SKIP_REASON,
         mappedIssuerTicker: liveEvt.issuerTicker,
         mappedRToken: evt.affectedSymbol,
+        marketProviderDomain,
       });
       await store.saveRunAudit(audit);
 
@@ -130,7 +156,7 @@ async function runLiveCompetitionCycle() {
     console.log(`Event Title: ${evt.title}`);
     console.log(`Source URL: ${liveEvt.externalProvenance?.sourceUrl}`);
     console.log(`Content Hash: ${liveEvt.externalProvenance?.contentHash}`);
-    console.log(`Market Price: ${market.symbol} (${market.confirmedMarketSymbol}) @ $${market.currentPrice}`);
+    console.log(`Market Price: ${market.symbol} @ $${market.currentPrice} (${market.externalProvenance?.publisherName || marketProviderDomain})`);
 
     const decision = await agentEngine.evaluateEventAsync(evt, market, watchlist, INITIAL_RISK_BUDGET);
     console.log(`AI Proposal: ${decision.action} (Confidence: ${decision.confidence}%)`);
@@ -156,7 +182,8 @@ async function runLiveCompetitionCycle() {
       decisionCreated: true,
       mappedIssuerTicker: liveEvt.issuerTicker,
       mappedRToken: evt.affectedSymbol,
-      confirmedMarketSymbol: market.confirmedMarketSymbol,
+      confirmedMarketSymbol: market.confirmedMarketSymbol || market.underlyingStockSymbol,
+      marketProviderDomain,
     });
     await store.saveRunAudit(audit);
 

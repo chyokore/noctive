@@ -7,6 +7,9 @@ interface DataProvenanceBadgeProps {
 }
 
 export const DataProvenanceBadge: React.FC<DataProvenanceBadgeProps> = ({ provenance }) => {
+  const ext = provenance.externalProvenance;
+  const isStooqRef = provenance.dataMode === 'LIVE_EXTERNAL_UNDERLYING_REFERENCE';
+
   return (
     <div className="p-3.5 rounded-xl bg-navy-950 border border-navy-800 space-y-2 text-xs font-mono">
       <div className="flex items-center justify-between border-b border-navy-800 pb-2">
@@ -17,12 +20,18 @@ export const DataProvenanceBadge: React.FC<DataProvenanceBadgeProps> = ({ proven
 
         <span
           className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-            provenance.isDemoData
+            isStooqRef
+              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+              : provenance.isDemoData
               ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-              : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+              : 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
           }`}
         >
-          {provenance.isDemoData ? 'DEMO DATA' : 'COMPETITION PAPER STREAM'}
+          {isStooqRef
+            ? 'LIVE EXTERNAL — UNDERLYING REFERENCE'
+            : provenance.isDemoData
+            ? 'DEMO DATA'
+            : 'LIVE EXTERNAL — VERIFIED BITGET RTOKEN'}
         </span>
       </div>
 
@@ -36,6 +45,25 @@ export const DataProvenanceBadge: React.FC<DataProvenanceBadgeProps> = ({ proven
           <span className="text-electric-400 font-medium">{provenance.llmSource}</span>
         </div>
       </div>
+
+      {ext && (
+        <div className="mt-2 pt-2 border-t border-navy-800/60 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
+          {ext.underlyingStockSymbol && (
+            <div>
+              <span className="text-slate-500 block">Underlying Reference Symbol:</span>
+              <span className="text-emerald-400 font-bold">{ext.underlyingStockSymbol} {ext.rawPrice ? `($${ext.rawPrice})` : ''}</span>
+            </div>
+          )}
+          {ext.sourceUrl && (
+            <div className="truncate">
+              <span className="text-slate-500 block">Source URL:</span>
+              <a href={ext.sourceUrl} target="_blank" rel="noreferrer" className="text-electric-400 hover:underline truncate block">
+                {ext.sourceUrl}
+              </a>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

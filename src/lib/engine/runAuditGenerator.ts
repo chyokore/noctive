@@ -11,6 +11,7 @@ export interface CreateRunAuditOptions {
   mappedIssuerTicker?: string;
   mappedRToken?: string;
   confirmedMarketSymbol?: string;
+  marketProviderDomain?: string;
 }
 
 export function createRunAuditRecord(opts: CreateRunAuditOptions): LiveRunAuditRecord {
@@ -19,7 +20,8 @@ export function createRunAuditRecord(opts: CreateRunAuditOptions): LiveRunAuditR
 
   // Domain-only URLs, no secrets
   const eventProviderDomain = 'www.sec.gov (SEC EDGAR Form 8-K Atom)';
-  const marketProviderDomain = 'api.bitget.com (Bitget Public Spot Tickers API)';
+  const marketProviderDomain =
+    opts.marketProviderDomain || 'api.bitget.com (Bitget Public Spot Tickers API)';
   const llmProviderDomain = 'hackathon.bitgetops.com (Qwen3.8-max)';
 
   const payloadToHash = JSON.stringify({

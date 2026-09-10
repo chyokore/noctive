@@ -5,13 +5,14 @@ import {
   RTOKEN_EQUITY_MAPPINGS,
   EXCHANGE_SYMBOL_LOOKUP,
 } from '../src/lib/adapters/liveMarketDataProvider';
+import { StooqMarketDataProvider, STOCK_REFERENCE_MAPPINGS, STOCK_SYMBOL_LOOKUP } from '../src/lib/adapters/stooqMarketDataProvider';
 import { ReceiptGenerator } from '../src/lib/engine/receiptGenerator';
 import { EventItem, MarketContext, AgentDecision, RiskEvaluationResult } from '../src/types/domain';
 
 describe('Live External Competition Data Pipeline & Symbol Resolution', () => {
   const receiptGenerator = new ReceiptGenerator();
 
-  it('should maintain exact rToken conceptual symbol to Bitget exchange market symbol mappings', () => {
+  it('should maintain exact rToken conceptual symbol to Bitget candidate exchange market symbol mappings', () => {
     expect(RTOKEN_EQUITY_MAPPINGS.rNVDA.exchangeMarketSymbol).toBe('NVDAUSDT');
     expect(RTOKEN_EQUITY_MAPPINGS.rAAPL.exchangeMarketSymbol).toBe('AAPLUSDT');
     expect(RTOKEN_EQUITY_MAPPINGS.rMSFT.exchangeMarketSymbol).toBe('MSFTUSDT');
@@ -26,6 +27,37 @@ describe('Live External Competition Data Pipeline & Symbol Resolution', () => {
     expect(EXCHANGE_SYMBOL_LOOKUP['TSLAUSDT'].rToken).toBe('rTSLA');
     expect(EXCHANGE_SYMBOL_LOOKUP['SPYUSDT'].rToken).toBe('rSPY');
     expect(EXCHANGE_SYMBOL_LOOKUP['QQQUSDT'].rToken).toBe('rQQQ');
+  });
+
+  it('should maintain exact Stooq underlying stock symbol mappings', () => {
+    expect(STOCK_REFERENCE_MAPPINGS.rNVDA.underlyingStockSymbol).toBe('NVDA.US');
+    expect(STOCK_REFERENCE_MAPPINGS.rAAPL.underlyingStockSymbol).toBe('AAPL.US');
+    expect(STOCK_REFERENCE_MAPPINGS.rMSFT.underlyingStockSymbol).toBe('MSFT.US');
+    expect(STOCK_REFERENCE_MAPPINGS.rTSLA.underlyingStockSymbol).toBe('TSLA.US');
+    expect(STOCK_REFERENCE_MAPPINGS.rSPY.underlyingStockSymbol).toBe('SPY.US');
+    expect(STOCK_REFERENCE_MAPPINGS.rQQQ.underlyingStockSymbol).toBe('QQQ.US');
+
+    expect(STOCK_SYMBOL_LOOKUP['NVDA.US'].rToken).toBe('rNVDA');
+    expect(STOCK_SYMBOL_LOOKUP['AAPL.US'].rToken).toBe('rAAPL');
+  });
+
+  it('StooqMarketDataProvider should return underlying stock reference items or fail-closed gracefully', async () => {
+    const stooqProvider = new StooqMarketDataProvider({ timeoutMs: 3000 });
+    const watchlist = await stooqProvider.getWatchlist();
+
+    if (watchlist.length > 0) {
+      watchlist.forEach((item: any) => {
+        expect(item.isDemoData).toBe(false);
+        expect(item.symbol).toBeDefined();
+        expect(supportedEquitiesOnly(item.symbol)).toBe(true);
+        expect(item.externalProvenance).toBeDefined();
+        expect(item.externalProvenance.dataMode).toBe('LIVE_EXTERNAL_UNDERLYING_REFERENCE');
+        expect(item.externalProvenance.underlyingStockSymbol).toBeDefined();
+        expect(item.externalProvenance.rawPrice).toBeGreaterThan(0);
+      });
+    } else {
+      expect(watchlist).toEqual([]);
+    }
   });
 
   it('LiveMarketDataProvider should return items marked with isDemoData: false or handle offline fail-closed', async () => {
@@ -59,6 +91,78 @@ describe('Live External Competition Data Pipeline & Symbol Resolution', () => {
     } else {
       expect(events).toEqual([]);
     }
+  });
+
+  it('ReceiptGenerator should set dataMode: LIVE_EXTERNAL_UNDERLYING_REFERENCE for Stooq reference prices', () => {
+    const liveEvent: EventItem = {
+      id: 'live-evt-stooq-001',
+      title: 'SEC EDGAR Official 8-K Regulatory Filing for NVIDIA Corp',
+      source: 'SEC EDGAR (sec.gov)',
+      timestamp: new Date().toISOString(),
+      category: 'LEGAL',
+      affectedSymbol: 'rNVDA',
+      impactScore: -6.5,
+      rawSnippet: 'Official regulatory disclosure filed by NVIDIA Corp.',
+      isDemoData: false,
+    };
+
+    const stooqMarket: MarketContext = {
+      symbol: 'rNVDA',
+      name: 'NVIDIA Corp (Underlying Reference)',
+      currentPrice: 128.45,
+      prevClose: 124.10,
+      change24hPct: 3.51,
+      bidPrice: 128.38,
+      askPrice: 128.52,
+      spreadPct: 0.05,
+      volume24hUsd: 50000000,
+      liquidityDepthIndex: 90,
+      sessionStatus: 'OVERNIGHT_ACTIVE',
+      isDemoData: false,
+      externalProvenance: {
+        sourceUrl: 'https://stooq.com/q/l/?s=nvda.us',
+        publisherName: 'Stooq Public Stock Reference',
+        retrievedAtTimestamp: new Date().toISOString(),
+        dataAsOfTimestamp: '2026-09-10T22:00:00Z',
+        underlyingStockSymbol: 'NVDA.US',
+        rawPrice: 128.45,
+        contentHash: 'abc123hash',
+        dataMode: 'LIVE_EXTERNAL_UNDERLYING_REFERENCE',
+      },
+    } as any;
+
+    const decision: AgentDecision = {
+      id: 'dec-stooq-001',
+      eventId: 'live-evt-stooq-001',
+      targetSymbol: 'rNVDA',
+      action: 'STAND_DOWN',
+      confidence: 90,
+      summary: 'Standing down due to legal uncertainty',
+      reasoning: ['Legal regulatory risk high'],
+      evidenceReferences: ['SEC Form 8-K'],
+      invalidationCondition: 'Clearance published',
+      priceDiscoveryProbability: 80,
+      calculatedPositionSizeUsd: 0,
+      suggestedStopLossPct: 2.0,
+      suggestedTakeProfitPct: 5.0,
+      timestamp: new Date().toISOString(),
+    };
+
+    const risk: RiskEvaluationResult = {
+      isApproved: false,
+      overallStatus: 'BLOCKED',
+      rules: [],
+      blockingReasons: ['Agent decision stand down'],
+      timestamp: new Date().toISOString(),
+    };
+
+    const receipt = receiptGenerator.generateReceipt(liveEvent, stooqMarket, decision, risk);
+
+    expect(receipt.isDemoData).toBe(false);
+    expect(receipt.provenance.isDemoData).toBe(false);
+    expect(receipt.provenance.dataMode).toBe('LIVE_EXTERNAL_UNDERLYING_REFERENCE');
+    expect(receipt.provenance.marketSource).toBe('Stooq Public Stock Reference');
+    expect(receipt.provenance.externalProvenance?.underlyingStockSymbol).toBe('NVDA.US');
   });
 
   it('ReceiptGenerator should set isDemoData: false and dataMode: LIVE_EXTERNAL for live external equity inputs', () => {
@@ -185,3 +289,4 @@ describe('Live External Competition Data Pipeline & Symbol Resolution', () => {
     return ['rNVDA', 'rAAPL', 'rMSFT', 'rTSLA', 'rSPY', 'rQQQ'].includes(symbol);
   }
 });
+

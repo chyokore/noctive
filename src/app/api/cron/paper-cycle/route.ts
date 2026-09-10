@@ -6,6 +6,7 @@ import { ReceiptGenerator } from '@/lib/engine/receiptGenerator';
 import { getLedgerStore } from '@/lib/store/persistentStore';
 import { LiveEventProvider } from '@/lib/adapters/liveEventProvider';
 import { LiveMarketDataProvider } from '@/lib/adapters/liveMarketDataProvider';
+import { StooqMarketDataProvider } from '@/lib/adapters/stooqMarketDataProvider';
 import { createRunAuditRecord } from '@/lib/engine/runAuditGenerator';
 import { INITIAL_RISK_BUDGET } from '@/lib/store/noctiveStore';
 import { DecisionReceipt } from '@/types/domain';
@@ -48,9 +49,18 @@ async function handlePaperCycle(request: NextRequest) {
 
   const liveEventProvider = new LiveEventProvider();
   const liveMarketProvider = new LiveMarketDataProvider();
+  const stooqMarketProvider = new StooqMarketDataProvider();
 
   const events = await liveEventProvider.getLatestEvents();
-  const watchlist = await liveMarketProvider.getWatchlist();
+  let watchlist = await liveMarketProvider.getWatchlist();
+
+  let marketProviderDomain = 'api.bitget.com';
+  if (watchlist.length === 0) {
+    watchlist = await stooqMarketProvider.getWatchlist();
+    if (watchlist.length > 0) {
+      marketProviderDomain = 'stooq.com';
+    }
+  }
 
   // Fail-closed requirement: If no qualifying live external equity events or confirmed Bitget market tickers available, skip execution and record run audit
   if (events.length === 0 || watchlist.length === 0) {
@@ -61,6 +71,7 @@ async function handlePaperCycle(request: NextRequest) {
       qwenInvoked: false,
       decisionCreated: false,
       safeSkipReason: NO_MARKET_SKIP_REASON,
+      marketProviderDomain,
     });
 
     try {
@@ -124,6 +135,7 @@ async function handlePaperCycle(request: NextRequest) {
     qwenInvoked: isQualified,
     decisionCreated: isQualified,
     safeSkipReason: isQualified ? undefined : NO_MARKET_SKIP_REASON,
+    marketProviderDomain,
   });
 
   try {

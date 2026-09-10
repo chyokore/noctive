@@ -112,8 +112,11 @@ export interface ExternalInputProvenance {
   symbolMapping?: string;
   conceptualRTokenSymbol?: string;
   exchangeMarketSymbol?: string;
+  underlyingStockSymbol?: string;
+  rawPrice?: number;
+  dataAsOfTimestamp?: string;
   contentHash: string;
-  dataMode: 'LIVE_EXTERNAL' | 'DEMO_DATA';
+  dataMode: 'LIVE_EXTERNAL' | 'LIVE_EXTERNAL_UNDERLYING_REFERENCE' | 'DEMO_DATA';
 }
 
 export interface LivePipelineStatus {
@@ -128,7 +131,7 @@ export interface LivePipelineStatus {
 }
 
 export interface DataProvenance {
-  dataMode: 'DEMO_DATA' | 'MOCK_MARKET_ADAPTER' | 'QWEN_CONNECTED' | 'LIVE_EXTERNAL';
+  dataMode: 'DEMO_DATA' | 'MOCK_MARKET_ADAPTER' | 'QWEN_CONNECTED' | 'LIVE_EXTERNAL' | 'LIVE_EXTERNAL_UNDERLYING_REFERENCE';
   marketSource: string;
   llmSource: string;
   isDemoData: boolean;

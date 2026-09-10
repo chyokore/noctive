@@ -16,42 +16,42 @@ export interface RTokenEquityMapping {
   issuerTicker: string;
 }
 
-// Explicit verified market mapping
+// Explicit candidate exchange market mapping (unverified candidate until confirmed by live Bitget API)
 export const RTOKEN_EQUITY_MAPPINGS: Record<string, RTokenEquityMapping> = {
   rNVDA: {
     rToken: 'rNVDA',
     exchangeMarketSymbol: 'NVDAUSDT',
-    name: 'NVIDIA Corp (Tokenized Equity)',
+    name: 'NVIDIA Corp (Tokenized Equity Candidate)',
     issuerTicker: 'NVDA',
   },
   rAAPL: {
     rToken: 'rAAPL',
     exchangeMarketSymbol: 'AAPLUSDT',
-    name: 'Apple Inc (Tokenized Equity)',
+    name: 'Apple Inc (Tokenized Equity Candidate)',
     issuerTicker: 'AAPL',
   },
   rMSFT: {
     rToken: 'rMSFT',
     exchangeMarketSymbol: 'MSFTUSDT',
-    name: 'Microsoft Corp (Tokenized Equity)',
+    name: 'Microsoft Corp (Tokenized Equity Candidate)',
     issuerTicker: 'MSFT',
   },
   rTSLA: {
     rToken: 'rTSLA',
     exchangeMarketSymbol: 'TSLAUSDT',
-    name: 'Tesla Inc (Tokenized Equity)',
+    name: 'Tesla Inc (Tokenized Equity Candidate)',
     issuerTicker: 'TSLA',
   },
   rSPY: {
     rToken: 'rSPY',
     exchangeMarketSymbol: 'SPYUSDT',
-    name: 'SPDR S&P 500 ETF (Tokenized Equity)',
+    name: 'SPDR S&P 500 ETF (Tokenized Equity Candidate)',
     issuerTicker: 'SPY',
   },
   rQQQ: {
     rToken: 'rQQQ',
     exchangeMarketSymbol: 'QQQUSDT',
-    name: 'Invesco QQQ Trust (Tokenized Equity)',
+    name: 'Invesco QQQ Trust (Tokenized Equity Candidate)',
     issuerTicker: 'QQQ',
   },
 };
@@ -110,7 +110,7 @@ export class LiveMarketDataProvider implements IMarketDataProvider {
       for (const item of body.data) {
         const rawSymbolUpper = (item.symbol || '').toUpperCase();
 
-        // Exact match against verified exchange market symbols (NVDAUSDT, AAPLUSDT, MSFTUSDT, TSLAUSDT, SPYUSDT, QQQUSDT)
+        // Exact match against candidate exchange market symbols (NVDAUSDT, AAPLUSDT, MSFTUSDT, TSLAUSDT, SPYUSDT, QQQUSDT)
         const mapping = EXCHANGE_SYMBOL_LOOKUP[rawSymbolUpper];
         if (!mapping) continue;
 
@@ -138,7 +138,7 @@ export class LiveMarketDataProvider implements IMarketDataProvider {
           publisherName: 'Bitget Public Spot Tickers API',
           retrievedAtTimestamp: rawRetrievalTimestamp,
           publishedAtTimestamp: rawRetrievalTimestamp,
-          symbolMapping: `Conceptual rToken: ${mapping.rToken} -> Confirmed Bitget Exchange Symbol: ${mapping.exchangeMarketSymbol}`,
+          symbolMapping: `Conceptual rToken: ${mapping.rToken} -> Confirmed Bitget Live Symbol: ${mapping.exchangeMarketSymbol}`,
           conceptualRTokenSymbol: mapping.rToken,
           exchangeMarketSymbol: mapping.exchangeMarketSymbol,
           contentHash,
