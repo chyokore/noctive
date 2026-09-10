@@ -18,14 +18,16 @@ if (fs.existsSync(envLocalPath)) {
   });
 }
 
-import { LiveEventProvider } from '../src/lib/adapters/liveEventProvider';
-import { LiveMarketDataProvider } from '../src/lib/adapters/liveMarketDataProvider';
+import { LiveEventProvider, LiveEventItemWithProvenance } from '../src/lib/adapters/liveEventProvider';
+import { LiveMarketDataProvider, MarketContextWithProvenance } from '../src/lib/adapters/liveMarketDataProvider';
 import { AgentEngine } from '../src/lib/engine/agentEngine';
 import { RiskEngine } from '../src/lib/engine/riskEngine';
 import { PaperExchange } from '../src/lib/engine/paperExchange';
 import { ReceiptGenerator } from '../src/lib/engine/receiptGenerator';
 import { INITIAL_RISK_BUDGET } from '../src/lib/store/noctiveStore';
 import { PersistentStore } from '../src/lib/store/persistentStore';
+
+const NO_MARKET_SKIP_REASON = 'No verified matching rToken market snapshot; competition decision skipped.';
 
 async function runLiveCompetitionCycle() {
   console.log('====================================================');
@@ -45,33 +47,48 @@ async function runLiveCompetitionCycle() {
   console.log(`LLM Provider Name: ${agentEngine.getProviderName()}`);
   console.log(`Store Type: ${store.storeType}`);
 
-  console.log('\nFetching live external market tickers from Bitget API...');
+  console.log('\nQuerying Bitget public API for verified tokenized-equity market symbols (NVDA, AAPL, MSFT, TSLA, SPY, QQQ)...');
   const watchlist = await liveMarketProvider.getWatchlist();
-  console.log(`Fetched ${watchlist.length} live spot market tickers.`);
+  console.log(`Bitget Verified Equity Markets Found: ${watchlist.length}`);
 
   console.log('\nFetching live primary events from SEC EDGAR RSS feed...');
   const events = await liveEventProvider.getLatestEvents();
-  console.log(`Fetched ${events.length} live primary external events.`);
+  console.log(`Mapped SEC Eligible Equity Events Found: ${events.length}`);
 
-  if (events.length === 0 || watchlist.length === 0) {
+  if (events.length === 0 && watchlist.length === 0) {
+    console.log('\n----------------------------------------------------');
+    console.log('Mapped SEC Issuer Ticker: None retrieved in current window');
+    console.log('Mapped rToken: None');
+    console.log('Confirmed Bitget Market Symbol: None found on Bitget public API');
+    console.log(`Safe Skip Reason: ${NO_MARKET_SKIP_REASON}`);
+    console.log('----------------------------------------------------');
     console.log('\n====================================================');
-    console.log('⚠️ NO QUALIFYING LIVE EXTERNAL EVENTS OR MARKET TICKERS AVAILABLE.');
-    console.log('🛑 FAIL-CLOSED: 0 COMPETITION RECORDS CREATED.');
+    console.log(`🛑 FAIL-CLOSED: ${NO_MARKET_SKIP_REASON}`);
     console.log('====================================================');
     return;
   }
 
-  console.log(`\nProcessing ${events.length} live external events...\n`);
+  let executedCount = 0;
 
   for (const evt of events) {
-    const market = watchlist.find((m) => m.symbol === evt.affectedSymbol) || watchlist[0];
-    const provenance = (evt as any).externalProvenance;
+    const liveEvt = evt as LiveEventItemWithProvenance;
+    const market = watchlist.find((m) => m.symbol === evt.affectedSymbol) as MarketContextWithProvenance | undefined;
 
-    console.log(`----------------------------------------------------`);
+    console.log(`\n----------------------------------------------------`);
+    console.log(`Mapped SEC Issuer Ticker: ${liveEvt.issuerTicker || 'N/A'}`);
+    console.log(`Mapped rToken: ${evt.affectedSymbol}`);
+    console.log(`Confirmed Bitget Market Symbol: ${market?.confirmedMarketSymbol || 'NOT_FOUND_ON_BITGET'}`);
+
+    if (!market) {
+      console.log(`Safe Skip Reason: ${NO_MARKET_SKIP_REASON}`);
+      console.log(`----------------------------------------------------`);
+      continue;
+    }
+
+    executedCount++;
     console.log(`Event Title: ${evt.title}`);
-    console.log(`Source URL: ${provenance?.sourceUrl || evt.source}`);
-    console.log(`Publisher: ${provenance?.publisherName || 'External Source'}`);
-    console.log(`Content Hash: ${provenance?.contentHash || 'N/A'}`);
+    console.log(`Source URL: ${liveEvt.externalProvenance?.sourceUrl}`);
+    console.log(`Content Hash: ${liveEvt.externalProvenance?.contentHash}`);
     console.log(`Market Price: ${market.symbol} @ $${market.currentPrice} (24h: ${market.change24hPct}%)`);
 
     const decision = await agentEngine.evaluateEventAsync(evt, market, watchlist, INITIAL_RISK_BUDGET);
@@ -90,6 +107,13 @@ async function runLiveCompetitionCycle() {
     const receipt = receiptGenerator.generateReceipt(evt, market, decision, risk, order);
     await store.saveReceipt(receipt);
     console.log(`Receipt Saved to Competition Ledger! Hash: ${receipt.hash} (ID: ${receipt.receiptId}, isDemoData: ${receipt.isDemoData})`);
+  }
+
+  if (executedCount === 0) {
+    console.log('\n====================================================');
+    console.log(`🛑 FAIL-CLOSED: ${NO_MARKET_SKIP_REASON}`);
+    console.log('====================================================');
+    return;
   }
 
   console.log('\n====================================================');

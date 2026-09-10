@@ -8,11 +8,25 @@ export interface LiveEventConfig {
 }
 
 const SEC_EDGAR_ATOM_URL = 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=8-K&output=atom';
-const SEC_PRESS_RELEASES_URL = 'https://www.sec.gov/news/pressreleases.rss';
 
 export interface LiveEventItemWithProvenance extends EventItem {
   externalProvenance: ExternalInputProvenance;
+  issuerTicker: string;
 }
+
+export interface EquityTickerMapping {
+  issuerTicker: string;
+  rToken: string;
+}
+
+const EQUITY_ALLOWLIST: Record<string, EquityTickerMapping> = {
+  NVDA: { issuerTicker: 'NVDA', rToken: 'rNVDA' },
+  AAPL: { issuerTicker: 'AAPL', rToken: 'rAAPL' },
+  MSFT: { issuerTicker: 'MSFT', rToken: 'rMSFT' },
+  TSLA: { issuerTicker: 'TSLA', rToken: 'rTSLA' },
+  SPY:  { issuerTicker: 'SPY',  rToken: 'rSPY' },
+  QQQ:  { issuerTicker: 'QQQ',  rToken: 'rQQQ' },
+};
 
 export class LiveEventProvider implements IEventProvider {
   private secRssUrl: string;
@@ -53,11 +67,16 @@ export class LiveEventProvider implements IEventProvider {
 
       const results: EventItem[] = [];
 
-      for (const entry of entries.slice(0, 5)) {
+      for (const entry of entries) {
+        // Extract issuer ticker and map ONLY to supported rToken equity allowlist
+        const mappedEquity = this.extractAndMapTicker(entry.title, entry.companyName, entry.rawSnippet);
+
+        // Fail-closed requirement: Only eligible when it maps to a supported rToken equity
+        if (!mappedEquity) continue;
+
         const id = `live-sec-${crypto.createHash('md5').update(entry.link || entry.title).digest('hex').substring(0, 12)}`;
         const contentHash = crypto.createHash('sha256').update(entry.rawSnippet).digest('hex').substring(0, 16);
         const category = this.categorizeTitle(entry.title, entry.rawSnippet);
-        const affectedSymbol = this.determineSymbol(entry.title, entry.rawSnippet);
         const impactScore = this.calculateImpactScore(category, entry.rawSnippet);
 
         const externalProvenance: ExternalInputProvenance = {
@@ -65,7 +84,7 @@ export class LiveEventProvider implements IEventProvider {
           publisherName: 'U.S. SEC EDGAR (sec.gov)',
           retrievedAtTimestamp,
           publishedAtTimestamp: entry.published || retrievedAtTimestamp,
-          symbolMapping: `${entry.companyName || 'Public Entity'} -> ${affectedSymbol}`,
+          symbolMapping: `SEC Issuer Ticker: ${mappedEquity.issuerTicker} -> Equity rToken: ${mappedEquity.rToken}`,
           contentHash,
           dataMode: 'LIVE_EXTERNAL',
         };
@@ -73,16 +92,18 @@ export class LiveEventProvider implements IEventProvider {
         const item: EventItem = {
           id,
           title: entry.title,
-          source: `SEC EDGAR Form 8-K (${entry.companyName || 'Public Filer'})`,
+          source: `SEC EDGAR Form 8-K (${entry.companyName || mappedEquity.issuerTicker})`,
           timestamp: entry.published || retrievedAtTimestamp,
           category,
-          affectedSymbol,
+          affectedSymbol: mappedEquity.rToken,
           impactScore,
           rawSnippet: entry.rawSnippet,
           isDemoData: false,
         };
 
         (item as LiveEventItemWithProvenance).externalProvenance = externalProvenance;
+        (item as LiveEventItemWithProvenance).issuerTicker = mappedEquity.issuerTicker;
+
         results.push(item);
       }
 
@@ -114,7 +135,6 @@ export class LiveEventProvider implements IEventProvider {
       rawSnippet: string;
     }> = [];
 
-    // Simple regex extraction for Atom <entry> or RSS <item> tags
     const entryBlocks = xml.match(/<(entry|item)[\s\S]*?<\/(entry|item)>/gi) || [];
 
     for (const block of entryBlocks) {
@@ -149,6 +169,20 @@ export class LiveEventProvider implements IEventProvider {
     return str.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, '$1').replace(/<[^>]+>/g, '').trim();
   }
 
+  private extractAndMapTicker(title: string, companyName: string, snippet: string): EquityTickerMapping | null {
+    const text = `${title} ${companyName} ${snippet}`.toUpperCase();
+
+    if (text.includes('NVIDIA') || text.includes('NVDA')) return EQUITY_ALLOWLIST.NVDA;
+    if (text.includes('APPLE') || text.includes('AAPL')) return EQUITY_ALLOWLIST.AAPL;
+    if (text.includes('MICROSOFT') || text.includes('MSFT')) return EQUITY_ALLOWLIST.MSFT;
+    if (text.includes('TESLA') || text.includes('TSLA')) return EQUITY_ALLOWLIST.TSLA;
+    if (text.includes('S&P 500') || text.includes('SPDR') || text.includes('SPY')) return EQUITY_ALLOWLIST.SPY;
+    if (text.includes('NASDAQ') || text.includes('QQQ') || text.includes('INVESCO')) return EQUITY_ALLOWLIST.QQQ;
+
+    // Strict fail closed for any unrecognized ticker or crypto symbol
+    return null;
+  }
+
   private categorizeTitle(title: string, snippet: string): EventCategory {
     const text = `${title} ${snippet}`.toLowerCase();
     if (text.includes('earnings') || text.includes('revenue') || text.includes('quarterly') || text.includes('result')) {
@@ -160,20 +194,7 @@ export class LiveEventProvider implements IEventProvider {
     if (text.includes('rate') || text.includes('fed') || text.includes('inflation') || text.includes('treasury')) {
       return 'MACRO';
     }
-    if (text.includes('regulation') || text.includes('policy') || text.includes('compliance') || text.includes('rule')) {
-      return 'POLICY';
-    }
     return 'POLICY';
-  }
-
-  private determineSymbol(title: string, snippet: string): string {
-    const text = `${title} ${snippet}`.toUpperCase();
-    if (text.includes('NVIDIA') || text.includes('NVDA')) return 'rNVDA';
-    if (text.includes('TESLA') || text.includes('TSLA')) return 'rTSLA';
-    if (text.includes('MICROSOFT') || text.includes('MSFT')) return 'rMSFT';
-    if (text.includes('APPLE') || text.includes('AAPL')) return 'rAAPL';
-    if (text.includes('BITGET') || text.includes('BGB')) return 'rBGB';
-    return 'rBGB';
   }
 
   private calculateImpactScore(category: EventCategory, snippet: string): number {

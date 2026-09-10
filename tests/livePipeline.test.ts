@@ -1,11 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import { LiveEventProvider } from '../src/lib/adapters/liveEventProvider';
-import { LiveMarketDataProvider } from '../src/lib/adapters/liveMarketDataProvider';
+import { LiveMarketDataProvider, SUPPORTED_EQUITIES } from '../src/lib/adapters/liveMarketDataProvider';
 import { ReceiptGenerator } from '../src/lib/engine/receiptGenerator';
 import { EventItem, MarketContext, AgentDecision, RiskEvaluationResult } from '../src/types/domain';
 
 describe('Live External Competition Data Pipeline', () => {
   const receiptGenerator = new ReceiptGenerator();
+
+  it('should restrict supported equities exclusively to rToken US equities (NVDA, AAPL, MSFT, TSLA, SPY, QQQ) and exclude all crypto assets', () => {
+    const supportedTokens = Object.values(SUPPORTED_EQUITIES).map((e) => e.rToken);
+    expect(supportedTokens).toEqual(['rNVDA', 'rAAPL', 'rMSFT', 'rTSLA', 'rSPY', 'rQQQ']);
+
+    // Ensure crypto symbols are strictly absent
+    expect(supportedTokens).not.toContain('rBGB');
+    expect(supportedTokens).not.toContain('rBTC');
+    expect(supportedTokens).not.toContain('rETH');
+    expect(supportedTokens).not.toContain('rSOL');
+    expect(supportedTokens).not.toContain('BGB');
+    expect(supportedTokens).not.toContain('BTC');
+  });
 
   it('LiveMarketDataProvider should return items marked with isDemoData: false or handle offline fail-closed', async () => {
     const marketProvider = new LiveMarketDataProvider({ timeoutMs: 3000 });
@@ -15,7 +28,7 @@ describe('Live External Competition Data Pipeline', () => {
       watchlist.forEach((item) => {
         expect(item.isDemoData).toBe(false);
         expect(item.symbol).toBeDefined();
-        expect(item.currentPrice).toBeGreaterThan(0);
+        expect(supportedEquitiesOnly(item.symbol)).toBe(true);
       });
     } else {
       expect(watchlist).toEqual([]);
@@ -30,6 +43,7 @@ describe('Live External Competition Data Pipeline', () => {
       events.forEach((evt) => {
         expect(evt.isDemoData).toBe(false);
         expect(evt.title).toBeDefined();
+        expect(supportedEquitiesOnly(evt.affectedSymbol)).toBe(true);
         expect((evt as any).externalProvenance).toBeDefined();
         expect((evt as any).externalProvenance.dataMode).toBe('LIVE_EXTERNAL');
         expect((evt as any).externalProvenance.sourceUrl).toBeDefined();
@@ -39,30 +53,30 @@ describe('Live External Competition Data Pipeline', () => {
     }
   });
 
-  it('ReceiptGenerator should set isDemoData: false and dataMode: LIVE_EXTERNAL for live external inputs', () => {
+  it('ReceiptGenerator should set isDemoData: false and dataMode: LIVE_EXTERNAL for live external equity inputs', () => {
     const liveEvent: EventItem = {
       id: 'live-evt-001',
-      title: 'SEC EDGAR Official 8-K Regulatory Filing',
+      title: 'SEC EDGAR Official 8-K Regulatory Filing for NVIDIA Corp',
       source: 'SEC EDGAR (sec.gov)',
       timestamp: new Date().toISOString(),
       category: 'LEGAL',
-      affectedSymbol: 'rBGB',
+      affectedSymbol: 'rNVDA',
       impactScore: -6.5,
-      rawSnippet: 'Official regulatory disclosure filed.',
+      rawSnippet: 'Official regulatory disclosure filed by NVIDIA Corp.',
       isDemoData: false,
     };
 
     const liveMarket: MarketContext = {
-      symbol: 'rBGB',
-      name: 'Bitget Token (Tokenized)',
-      currentPrice: 1.15,
-      prevClose: 1.18,
-      change24hPct: -2.54,
-      bidPrice: 1.149,
-      askPrice: 1.151,
-      spreadPct: 0.17,
-      volume24hUsd: 12000000,
-      liquidityDepthIndex: 85,
+      symbol: 'rNVDA',
+      name: 'NVIDIA Corp (Tokenized Equity)',
+      currentPrice: 128.45,
+      prevClose: 124.10,
+      change24hPct: 3.51,
+      bidPrice: 128.38,
+      askPrice: 128.52,
+      spreadPct: 0.11,
+      volume24hUsd: 14000000,
+      liquidityDepthIndex: 88,
       sessionStatus: 'OVERNIGHT_ACTIVE',
       isDemoData: false,
     };
@@ -70,7 +84,7 @@ describe('Live External Competition Data Pipeline', () => {
     const decision: AgentDecision = {
       id: 'dec-live-001',
       eventId: 'live-evt-001',
-      targetSymbol: 'rBGB',
+      targetSymbol: 'rNVDA',
       action: 'STAND_DOWN',
       confidence: 90,
       summary: 'Standing down due to legal uncertainty',
@@ -158,4 +172,8 @@ describe('Live External Competition Data Pipeline', () => {
     expect(receipt.provenance.isDemoData).toBe(true);
     expect(receipt.provenance.dataMode).not.toBe('LIVE_EXTERNAL');
   });
+
+  function supportedEquitiesOnly(symbol: string): boolean {
+    return ['rNVDA', 'rAAPL', 'rMSFT', 'rTSLA', 'rSPY', 'rQQQ'].includes(symbol);
+  }
 });

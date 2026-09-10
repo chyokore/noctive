@@ -9,6 +9,8 @@ import { LiveMarketDataProvider } from '@/lib/adapters/liveMarketDataProvider';
 import { INITIAL_RISK_BUDGET } from '@/lib/store/noctiveStore';
 import { DecisionReceipt } from '@/types/domain';
 
+const NO_MARKET_SKIP_REASON = 'No verified matching rToken market snapshot; competition decision skipped.';
+
 async function handlePaperCycle(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get('authorization');
@@ -49,13 +51,13 @@ async function handlePaperCycle(request: NextRequest) {
   const events = await liveEventProvider.getLatestEvents();
   const watchlist = await liveMarketProvider.getWatchlist();
 
-  // Fail-closed requirement: If no qualifying live external events or market data available, do not create fake records
+  // Fail-closed requirement: If no qualifying live external equity events or confirmed Bitget market tickers available, skip execution
   if (events.length === 0 || watchlist.length === 0) {
-    console.log('[CronPaperCycle] No qualifying live external events or market data retrieved today. Fail-closed: 0 competition receipts created.');
+    console.log(`[CronPaperCycle] ${NO_MARKET_SKIP_REASON}`);
     return NextResponse.json({
       success: true,
       skipped: true,
-      reason: 'No qualifying live-source external events or market tickers retrieved today (fail-closed operational rule).',
+      reason: NO_MARKET_SKIP_REASON,
       pipelineStatus: 'NO_QUALIFYING_EVENTS',
       cyclesExecuted: 0,
       storeType: store.storeType,
@@ -67,7 +69,12 @@ async function handlePaperCycle(request: NextRequest) {
 
   try {
     for (const evt of events) {
-      const market = watchlist.find((m) => m.symbol === evt.affectedSymbol) || watchlist[0];
+      const market = watchlist.find((m) => m.symbol === evt.affectedSymbol);
+      if (!market) {
+        console.log(`[CronPaperCycle] ${NO_MARKET_SKIP_REASON} (Symbol: ${evt.affectedSymbol})`);
+        continue;
+      }
+
       const decision = await agentEngine.evaluateEventAsync(evt, market, watchlist, INITIAL_RISK_BUDGET);
       const risk = riskEngine.evaluateRisk(decision, market, INITIAL_RISK_BUDGET);
       const order = paperExchange.executePaperOrder(decision, market, risk.isApproved);
@@ -89,6 +96,19 @@ async function handlePaperCycle(request: NextRequest) {
       },
       { status: 500 }
     );
+  }
+
+  if (generatedReceipts.length === 0) {
+    console.log(`[CronPaperCycle] ${NO_MARKET_SKIP_REASON}`);
+    return NextResponse.json({
+      success: true,
+      skipped: true,
+      reason: NO_MARKET_SKIP_REASON,
+      pipelineStatus: 'NO_QUALIFYING_EVENTS',
+      cyclesExecuted: 0,
+      storeType: store.storeType,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   return NextResponse.json({
