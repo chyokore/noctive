@@ -113,6 +113,8 @@ export const ExternalInputProvenanceSchema = z.object({
   retrievedAtTimestamp: z.string(),
   publishedAtTimestamp: z.string().optional(),
   symbolMapping: z.string().optional(),
+  conceptualRTokenSymbol: z.string().optional(),
+  exchangeMarketSymbol: z.string().optional(),
   contentHash: z.string().min(1),
   dataMode: z.enum(['LIVE_EXTERNAL', 'DEMO_DATA']),
 });

@@ -110,6 +110,8 @@ export interface ExternalInputProvenance {
   retrievedAtTimestamp: string;
   publishedAtTimestamp?: string;
   symbolMapping?: string;
+  conceptualRTokenSymbol?: string;
+  exchangeMarketSymbol?: string;
   contentHash: string;
   dataMode: 'LIVE_EXTERNAL' | 'DEMO_DATA';
 }

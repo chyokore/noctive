@@ -9,51 +9,61 @@ export interface LiveMarketConfig {
 
 const BITGET_TICKERS_URL = 'https://api.bitget.com/api/v2/spot/market/tickers';
 
-export interface SupportedEquityDef {
+export interface RTokenEquityMapping {
   rToken: string;
+  exchangeMarketSymbol: string;
   name: string;
   issuerTicker: string;
-  candidateSymbols: string[];
 }
 
-export const SUPPORTED_EQUITIES: Record<string, SupportedEquityDef> = {
-  NVDA: {
+// Explicit verified market mapping
+export const RTOKEN_EQUITY_MAPPINGS: Record<string, RTokenEquityMapping> = {
+  rNVDA: {
     rToken: 'rNVDA',
+    exchangeMarketSymbol: 'NVDAUSDT',
     name: 'NVIDIA Corp (Tokenized Equity)',
     issuerTicker: 'NVDA',
-    candidateSymbols: ['RNVDAUSDT', 'NVDAUSDT', 'RNVDA_USDT', 'NVDA_USDT'],
   },
-  AAPL: {
+  rAAPL: {
     rToken: 'rAAPL',
+    exchangeMarketSymbol: 'AAPLUSDT',
     name: 'Apple Inc (Tokenized Equity)',
     issuerTicker: 'AAPL',
-    candidateSymbols: ['RAAPLUSDT', 'AAPLUSDT', 'RAAPL_USDT', 'AAPL_USDT'],
   },
-  MSFT: {
+  rMSFT: {
     rToken: 'rMSFT',
+    exchangeMarketSymbol: 'MSFTUSDT',
     name: 'Microsoft Corp (Tokenized Equity)',
     issuerTicker: 'MSFT',
-    candidateSymbols: ['RMSFTUSDT', 'MSFTUSDT', 'RMSFT_USDT', 'MSFT_USDT'],
   },
-  TSLA: {
+  rTSLA: {
     rToken: 'rTSLA',
+    exchangeMarketSymbol: 'TSLAUSDT',
     name: 'Tesla Inc (Tokenized Equity)',
     issuerTicker: 'TSLA',
-    candidateSymbols: ['RTSLAUSDT', 'TSLAUSDT', 'RTSLA_USDT', 'TSLA_USDT'],
   },
-  SPY: {
+  rSPY: {
     rToken: 'rSPY',
+    exchangeMarketSymbol: 'SPYUSDT',
     name: 'SPDR S&P 500 ETF (Tokenized Equity)',
     issuerTicker: 'SPY',
-    candidateSymbols: ['RSPYUSDT', 'SPYUSDT', 'RSPY_USDT', 'SPY_USDT'],
   },
-  QQQ: {
+  rQQQ: {
     rToken: 'rQQQ',
+    exchangeMarketSymbol: 'QQQUSDT',
     name: 'Invesco QQQ Trust (Tokenized Equity)',
     issuerTicker: 'QQQ',
-    candidateSymbols: ['RQQQUSDT', 'QQQUSDT', 'RQQQ_USDT', 'QQQ_USDT'],
   },
 };
+
+// Map exchange market symbol (e.g. NVDAUSDT) -> RTokenEquityMapping
+export const EXCHANGE_SYMBOL_LOOKUP: Record<string, RTokenEquityMapping> = Object.values(RTOKEN_EQUITY_MAPPINGS).reduce(
+  (acc, mapping) => {
+    acc[mapping.exchangeMarketSymbol.toUpperCase()] = mapping;
+    return acc;
+  },
+  {} as Record<string, RTokenEquityMapping>
+);
 
 export interface MarketContextWithProvenance extends MarketContext {
   externalProvenance: ExternalInputProvenance;
@@ -100,18 +110,13 @@ export class LiveMarketDataProvider implements IMarketDataProvider {
       for (const item of body.data) {
         const rawSymbolUpper = (item.symbol || '').toUpperCase();
 
-        // Match against explicit supported tokenized equity candidate symbols only (NO CRYPTO)
-        let matchedEquityKey: string | null = null;
-        for (const [key, def] of Object.entries(SUPPORTED_EQUITIES)) {
-          if (def.candidateSymbols.includes(rawSymbolUpper)) {
-            matchedEquityKey = key;
-            break;
-          }
-        }
+        // Exact match against verified exchange market symbols (NVDAUSDT, AAPLUSDT, MSFTUSDT, TSLAUSDT, SPYUSDT, QQQUSDT)
+        const mapping = EXCHANGE_SYMBOL_LOOKUP[rawSymbolUpper];
+        if (!mapping) continue;
 
-        if (!matchedEquityKey) continue;
+        // Confirm returned symbol matches expected exchange market symbol
+        if (rawSymbolUpper !== mapping.exchangeMarketSymbol.toUpperCase()) continue;
 
-        const equityDef = SUPPORTED_EQUITIES[matchedEquityKey];
         const currentPrice = parseFloat(item.lastPr || '0');
         const change24hPct = parseFloat(item.change24h || '0') * 100;
         const bidPrice = parseFloat(item.bidPr || item.lastPr || '0');
@@ -133,14 +138,16 @@ export class LiveMarketDataProvider implements IMarketDataProvider {
           publisherName: 'Bitget Public Spot Tickers API',
           retrievedAtTimestamp: rawRetrievalTimestamp,
           publishedAtTimestamp: rawRetrievalTimestamp,
-          symbolMapping: `Confirmed Bitget Listed Symbol: ${item.symbol} -> Equity rToken: ${equityDef.rToken}`,
+          symbolMapping: `Conceptual rToken: ${mapping.rToken} -> Confirmed Bitget Exchange Symbol: ${mapping.exchangeMarketSymbol}`,
+          conceptualRTokenSymbol: mapping.rToken,
+          exchangeMarketSymbol: mapping.exchangeMarketSymbol,
           contentHash,
           dataMode: 'LIVE_EXTERNAL',
         };
 
         const ctx: MarketContextWithProvenance = {
-          symbol: equityDef.rToken,
-          name: equityDef.name,
+          symbol: mapping.rToken,
+          name: mapping.name,
           currentPrice: currentPrice > 0 ? currentPrice : 1.0,
           prevClose: prevClose > 0 ? prevClose : 1.0,
           change24hPct: parseFloat(change24hPct.toFixed(2)),

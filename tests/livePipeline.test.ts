@@ -1,23 +1,31 @@
 import { describe, it, expect } from 'vitest';
 import { LiveEventProvider } from '../src/lib/adapters/liveEventProvider';
-import { LiveMarketDataProvider, SUPPORTED_EQUITIES } from '../src/lib/adapters/liveMarketDataProvider';
+import {
+  LiveMarketDataProvider,
+  RTOKEN_EQUITY_MAPPINGS,
+  EXCHANGE_SYMBOL_LOOKUP,
+} from '../src/lib/adapters/liveMarketDataProvider';
 import { ReceiptGenerator } from '../src/lib/engine/receiptGenerator';
 import { EventItem, MarketContext, AgentDecision, RiskEvaluationResult } from '../src/types/domain';
 
-describe('Live External Competition Data Pipeline', () => {
+describe('Live External Competition Data Pipeline & Symbol Resolution', () => {
   const receiptGenerator = new ReceiptGenerator();
 
-  it('should restrict supported equities exclusively to rToken US equities (NVDA, AAPL, MSFT, TSLA, SPY, QQQ) and exclude all crypto assets', () => {
-    const supportedTokens = Object.values(SUPPORTED_EQUITIES).map((e) => e.rToken);
-    expect(supportedTokens).toEqual(['rNVDA', 'rAAPL', 'rMSFT', 'rTSLA', 'rSPY', 'rQQQ']);
+  it('should maintain exact rToken conceptual symbol to Bitget exchange market symbol mappings', () => {
+    expect(RTOKEN_EQUITY_MAPPINGS.rNVDA.exchangeMarketSymbol).toBe('NVDAUSDT');
+    expect(RTOKEN_EQUITY_MAPPINGS.rAAPL.exchangeMarketSymbol).toBe('AAPLUSDT');
+    expect(RTOKEN_EQUITY_MAPPINGS.rMSFT.exchangeMarketSymbol).toBe('MSFTUSDT');
+    expect(RTOKEN_EQUITY_MAPPINGS.rTSLA.exchangeMarketSymbol).toBe('TSLAUSDT');
+    expect(RTOKEN_EQUITY_MAPPINGS.rSPY.exchangeMarketSymbol).toBe('SPYUSDT');
+    expect(RTOKEN_EQUITY_MAPPINGS.rQQQ.exchangeMarketSymbol).toBe('QQQUSDT');
 
-    // Ensure crypto symbols are strictly absent
-    expect(supportedTokens).not.toContain('rBGB');
-    expect(supportedTokens).not.toContain('rBTC');
-    expect(supportedTokens).not.toContain('rETH');
-    expect(supportedTokens).not.toContain('rSOL');
-    expect(supportedTokens).not.toContain('BGB');
-    expect(supportedTokens).not.toContain('BTC');
+    // Inverse lookup checks
+    expect(EXCHANGE_SYMBOL_LOOKUP['NVDAUSDT'].rToken).toBe('rNVDA');
+    expect(EXCHANGE_SYMBOL_LOOKUP['AAPLUSDT'].rToken).toBe('rAAPL');
+    expect(EXCHANGE_SYMBOL_LOOKUP['MSFTUSDT'].rToken).toBe('rMSFT');
+    expect(EXCHANGE_SYMBOL_LOOKUP['TSLAUSDT'].rToken).toBe('rTSLA');
+    expect(EXCHANGE_SYMBOL_LOOKUP['SPYUSDT'].rToken).toBe('rSPY');
+    expect(EXCHANGE_SYMBOL_LOOKUP['QQQUSDT'].rToken).toBe('rQQQ');
   });
 
   it('LiveMarketDataProvider should return items marked with isDemoData: false or handle offline fail-closed', async () => {

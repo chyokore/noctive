@@ -19,7 +19,7 @@ if (fs.existsSync(envLocalPath)) {
 }
 
 import { LiveEventProvider, LiveEventItemWithProvenance } from '../src/lib/adapters/liveEventProvider';
-import { LiveMarketDataProvider, MarketContextWithProvenance } from '../src/lib/adapters/liveMarketDataProvider';
+import { LiveMarketDataProvider, MarketContextWithProvenance, RTOKEN_EQUITY_MAPPINGS } from '../src/lib/adapters/liveMarketDataProvider';
 import { AgentEngine } from '../src/lib/engine/agentEngine';
 import { RiskEngine } from '../src/lib/engine/riskEngine';
 import { PaperExchange } from '../src/lib/engine/paperExchange';
@@ -31,9 +31,11 @@ import { PersistentStore } from '../src/lib/store/persistentStore';
 const NO_MARKET_SKIP_REASON = 'No verified matching rToken market snapshot; competition decision skipped.';
 
 async function runLiveCompetitionCycle() {
+  const rawRetrievedTimestamp = new Date().toISOString();
   console.log('====================================================');
   console.log('📡 NOCTIVE LIVE EXTERNAL COMPETITION PAPER CYCLE');
   console.log('====================================================');
+  console.log(`Raw Retrieval Timestamp: ${rawRetrievedTimestamp}`);
 
   const agentEngine = new AgentEngine();
   const riskEngine = new RiskEngine();
@@ -48,19 +50,35 @@ async function runLiveCompetitionCycle() {
   console.log(`LLM Provider Name: ${agentEngine.getProviderName()}`);
   console.log(`Store Type: ${store.storeType}`);
 
-  console.log('\nQuerying Bitget public API for verified tokenized-equity market symbols (NVDA, AAPL, MSFT, TSLA, SPY, QQQ)...');
+  console.log('\nQuerying Bitget public API for verified exchange market symbols (NVDAUSDT, AAPLUSDT, MSFTUSDT, TSLAUSDT, SPYUSDT, QQQUSDT)...');
   const watchlist = await liveMarketProvider.getWatchlist();
-  console.log(`Bitget Verified Equity Markets Found: ${watchlist.length}`);
+
+  console.log('\nExchange Market Symbol Resolution Results:');
+  Object.values(RTOKEN_EQUITY_MAPPINGS).forEach((mapping) => {
+    const found = watchlist.find((m) => m.symbol === mapping.rToken);
+    if (found) {
+      console.log(`  ✅ ${mapping.rToken} -> ${mapping.exchangeMarketSymbol}: CONFIRMED ($${found.currentPrice})`);
+    } else {
+      console.log(`  🛑 ${mapping.rToken} -> ${mapping.exchangeMarketSymbol}: NOT LISTED ON BITGET`);
+    }
+  });
 
   console.log('\nFetching live primary events from SEC EDGAR RSS feed...');
   const events = await liveEventProvider.getLatestEvents();
   console.log(`Mapped SEC Eligible Equity Events Found: ${events.length}`);
 
-  if (events.length === 0 && watchlist.length === 0) {
+  if (events.length > 0) {
+    const firstEvt = events[0] as LiveEventItemWithProvenance;
+    console.log(`Mapped SEC Event: "${firstEvt.title}" (Issuer: ${firstEvt.issuerTicker} -> rToken: ${firstEvt.affectedSymbol})`);
+  } else {
+    console.log('Mapped SEC Event: None retrieved in current window');
+  }
+
+  if (events.length === 0 || watchlist.length === 0) {
     const audit = createRunAuditRecord({
       status: 'SAFE_SKIP',
-      eventProviderStatus: 'NO_EVENTS',
-      marketProviderStatus: 'UNVERIFIED_EQUITY_MARKET',
+      eventProviderStatus: events.length > 0 ? 'HEALTHY' : 'NO_EVENTS',
+      marketProviderStatus: watchlist.length > 0 ? 'HEALTHY' : 'UNVERIFIED_EQUITY_MARKET',
       qwenInvoked: false,
       decisionCreated: false,
       safeSkipReason: NO_MARKET_SKIP_REASON,
@@ -68,9 +86,7 @@ async function runLiveCompetitionCycle() {
     await store.saveRunAudit(audit);
 
     console.log('\n----------------------------------------------------');
-    console.log('Mapped SEC Issuer Ticker: None retrieved in current window');
-    console.log('Mapped rToken: None');
-    console.log('Confirmed Bitget Market Symbol: None found on Bitget public API');
+    console.log(`Qualifying Live Paper Decision: SAFELY SKIPPED`);
     console.log(`Safe Skip Reason: ${NO_MARKET_SKIP_REASON}`);
     console.log(`Run Audit Hash: ${audit.hash} (ID: ${audit.auditId})`);
     console.log('----------------------------------------------------');
@@ -88,7 +104,7 @@ async function runLiveCompetitionCycle() {
 
     console.log(`\n----------------------------------------------------`);
     console.log(`Mapped SEC Issuer Ticker: ${liveEvt.issuerTicker || 'N/A'}`);
-    console.log(`Mapped rToken: ${evt.affectedSymbol}`);
+    console.log(`Mapped Conceptual rToken: ${evt.affectedSymbol}`);
     console.log(`Confirmed Bitget Market Symbol: ${market?.confirmedMarketSymbol || 'NOT_FOUND_ON_BITGET'}`);
 
     if (!market) {
@@ -114,7 +130,7 @@ async function runLiveCompetitionCycle() {
     console.log(`Event Title: ${evt.title}`);
     console.log(`Source URL: ${liveEvt.externalProvenance?.sourceUrl}`);
     console.log(`Content Hash: ${liveEvt.externalProvenance?.contentHash}`);
-    console.log(`Market Price: ${market.symbol} @ $${market.currentPrice} (24h: ${market.change24hPct}%)`);
+    console.log(`Market Price: ${market.symbol} (${market.confirmedMarketSymbol}) @ $${market.currentPrice}`);
 
     const decision = await agentEngine.evaluateEventAsync(evt, market, watchlist, INITIAL_RISK_BUDGET);
     console.log(`AI Proposal: ${decision.action} (Confidence: ${decision.confidence}%)`);
@@ -144,7 +160,7 @@ async function runLiveCompetitionCycle() {
     });
     await store.saveRunAudit(audit);
 
-    console.log(`Receipt Saved to Competition Ledger! Hash: ${receipt.hash} (ID: ${receipt.receiptId}, isDemoData: ${receipt.isDemoData})`);
+    console.log(`Receipt Saved to Competition Ledger! Hash: ${receipt.hash} (ID: ${receipt.receiptId})`);
     console.log(`Run Audit Saved: ${audit.hash} (ID: ${audit.auditId})`);
   }
 
