@@ -143,6 +143,26 @@ export interface DecisionAuthoritySummary {
   overrideExplanation?: string;
 }
 
+export type LiveRunAuditStatus = 'QUALIFIED' | 'SAFE_SKIP' | 'PROVIDER_UNAVAILABLE';
+
+export interface LiveRunAuditRecord {
+  auditId: string;
+  timestamp: string;
+  hash: string;
+  status: LiveRunAuditStatus;
+  eventProviderStatus: 'HEALTHY' | 'NO_EVENTS' | 'UNAVAILABLE';
+  marketProviderStatus: 'HEALTHY' | 'UNVERIFIED_EQUITY_MARKET' | 'UNAVAILABLE';
+  qwenInvoked: boolean;
+  decisionCreated: boolean;
+  safeSkipReason?: string;
+  eventProviderDomain: string;
+  marketProviderDomain: string;
+  llmProviderDomain: string;
+  mappedIssuerTicker?: string;
+  mappedRToken?: string;
+  confirmedMarketSymbol?: string;
+}
+
 export interface DecisionReceipt {
   receiptId: string;
   timestamp: string;

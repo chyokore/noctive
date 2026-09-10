@@ -128,6 +128,26 @@ export const LivePipelineStatusSchema = z.object({
   activeMarketSources: z.array(z.string()),
 });
 
+export const LiveRunAuditStatusSchema = z.enum(['QUALIFIED', 'SAFE_SKIP', 'PROVIDER_UNAVAILABLE']);
+
+export const LiveRunAuditRecordSchema = z.object({
+  auditId: z.string().min(1),
+  timestamp: z.string(),
+  hash: z.string().min(8),
+  status: LiveRunAuditStatusSchema,
+  eventProviderStatus: z.enum(['HEALTHY', 'NO_EVENTS', 'UNAVAILABLE']),
+  marketProviderStatus: z.enum(['HEALTHY', 'UNVERIFIED_EQUITY_MARKET', 'UNAVAILABLE']),
+  qwenInvoked: z.boolean(),
+  decisionCreated: z.boolean(),
+  safeSkipReason: z.string().optional(),
+  eventProviderDomain: z.string().min(1),
+  marketProviderDomain: z.string().min(1),
+  llmProviderDomain: z.string().min(1),
+  mappedIssuerTicker: z.string().optional(),
+  mappedRToken: z.string().optional(),
+  confirmedMarketSymbol: z.string().optional(),
+});
+
 export const DataProvenanceSchema = z.object({
   dataMode: z.enum(['DEMO_DATA', 'MOCK_MARKET_ADAPTER', 'QWEN_CONNECTED', 'LIVE_EXTERNAL']),
   marketSource: z.string(),

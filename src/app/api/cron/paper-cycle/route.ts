@@ -6,6 +6,7 @@ import { ReceiptGenerator } from '@/lib/engine/receiptGenerator';
 import { getLedgerStore } from '@/lib/store/persistentStore';
 import { LiveEventProvider } from '@/lib/adapters/liveEventProvider';
 import { LiveMarketDataProvider } from '@/lib/adapters/liveMarketDataProvider';
+import { createRunAuditRecord } from '@/lib/engine/runAuditGenerator';
 import { INITIAL_RISK_BUDGET } from '@/lib/store/noctiveStore';
 import { DecisionReceipt } from '@/types/domain';
 
@@ -51,14 +52,31 @@ async function handlePaperCycle(request: NextRequest) {
   const events = await liveEventProvider.getLatestEvents();
   const watchlist = await liveMarketProvider.getWatchlist();
 
-  // Fail-closed requirement: If no qualifying live external equity events or confirmed Bitget market tickers available, skip execution
+  // Fail-closed requirement: If no qualifying live external equity events or confirmed Bitget market tickers available, skip execution and record run audit
   if (events.length === 0 || watchlist.length === 0) {
+    const audit = createRunAuditRecord({
+      status: 'SAFE_SKIP',
+      eventProviderStatus: events.length > 0 ? 'HEALTHY' : 'NO_EVENTS',
+      marketProviderStatus: watchlist.length > 0 ? 'HEALTHY' : 'UNVERIFIED_EQUITY_MARKET',
+      qwenInvoked: false,
+      decisionCreated: false,
+      safeSkipReason: NO_MARKET_SKIP_REASON,
+    });
+
+    try {
+      await store.saveRunAudit(audit);
+    } catch (auditErr) {
+      console.warn('[CronPaperCycle] Persistent run audit save failed:', auditErr);
+    }
+
     console.log(`[CronPaperCycle] ${NO_MARKET_SKIP_REASON}`);
     return NextResponse.json({
       success: true,
       skipped: true,
       reason: NO_MARKET_SKIP_REASON,
       pipelineStatus: 'NO_QUALIFYING_EVENTS',
+      auditId: audit.auditId,
+      auditHash: audit.hash,
       cyclesExecuted: 0,
       storeType: store.storeType,
       timestamp: new Date().toISOString(),
@@ -98,13 +116,31 @@ async function handlePaperCycle(request: NextRequest) {
     );
   }
 
-  if (generatedReceipts.length === 0) {
+  const isQualified = generatedReceipts.length > 0;
+  const audit = createRunAuditRecord({
+    status: isQualified ? 'QUALIFIED' : 'SAFE_SKIP',
+    eventProviderStatus: 'HEALTHY',
+    marketProviderStatus: isQualified ? 'HEALTHY' : 'UNVERIFIED_EQUITY_MARKET',
+    qwenInvoked: isQualified,
+    decisionCreated: isQualified,
+    safeSkipReason: isQualified ? undefined : NO_MARKET_SKIP_REASON,
+  });
+
+  try {
+    await store.saveRunAudit(audit);
+  } catch (auditErr) {
+    console.warn('[CronPaperCycle] Persistent run audit save failed:', auditErr);
+  }
+
+  if (!isQualified) {
     console.log(`[CronPaperCycle] ${NO_MARKET_SKIP_REASON}`);
     return NextResponse.json({
       success: true,
       skipped: true,
       reason: NO_MARKET_SKIP_REASON,
       pipelineStatus: 'NO_QUALIFYING_EVENTS',
+      auditId: audit.auditId,
+      auditHash: audit.hash,
       cyclesExecuted: 0,
       storeType: store.storeType,
       timestamp: new Date().toISOString(),
@@ -121,6 +157,8 @@ async function handlePaperCycle(request: NextRequest) {
     storeType: store.storeType,
     cyclesExecuted: generatedReceipts.length,
     receiptIds: generatedReceipts.map((r) => r.receiptId),
+    auditId: audit.auditId,
+    auditHash: audit.hash,
     timestamp: new Date().toISOString(),
   });
 }

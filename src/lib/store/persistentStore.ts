@@ -1,4 +1,4 @@
-import { DecisionReceipt, CompetitionLogMetrics } from '@/types/domain';
+import { DecisionReceipt, CompetitionLogMetrics, LiveRunAuditRecord } from '@/types/domain';
 import { INITIAL_RECEIPTS } from './noctiveStore';
 import { Client } from 'pg';
 
@@ -6,6 +6,8 @@ export interface ILedgerStore {
   storeType: 'LOCAL_FILE' | 'POSTGRES_DB' | 'MEMORY_FALLBACK';
   getReceipts(): Promise<DecisionReceipt[]>;
   saveReceipt(receipt: DecisionReceipt): Promise<void>;
+  getRunAudits(): Promise<LiveRunAuditRecord[]>;
+  saveRunAudit(record: LiveRunAuditRecord): Promise<void>;
   getCompetitionMetrics(isDemoFilter?: boolean): Promise<CompetitionLogMetrics>;
 }
 
@@ -60,6 +62,7 @@ export function getLedgerStoreInfo(): LedgerStoreInfo {
 export class LocalFileLedgerStore implements ILedgerStore {
   public storeType: 'LOCAL_FILE' | 'MEMORY_FALLBACK' = process.env.VERCEL ? 'MEMORY_FALLBACK' : 'LOCAL_FILE';
   private static inMemoryCache: DecisionReceipt[] | null = null;
+  private static inMemoryAuditCache: LiveRunAuditRecord[] | null = null;
 
   public async getReceipts(): Promise<DecisionReceipt[]> {
     if (LocalFileLedgerStore.inMemoryCache !== null) {
@@ -107,6 +110,60 @@ export class LocalFileLedgerStore implements ILedgerStore {
         const path = require('path');
         const dataDir = path.join(process.cwd(), '.data');
         const filePath = path.join(dataDir, 'paper_ledger.json');
+
+        if (!fs.existsSync(dataDir)) {
+          fs.mkdirSync(dataDir, { recursive: true });
+        }
+        fs.writeFileSync(filePath, JSON.stringify(updated, null, 2), 'utf-8');
+      } catch {
+        // Memory fallback
+      }
+    }
+  }
+
+  public async getRunAudits(): Promise<LiveRunAuditRecord[]> {
+    if (LocalFileLedgerStore.inMemoryAuditCache !== null) {
+      return LocalFileLedgerStore.inMemoryAuditCache;
+    }
+
+    if (typeof window === 'undefined' && !process.env.VERCEL) {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const dataDir = path.join(process.cwd(), '.data');
+        const filePath = path.join(dataDir, 'live_run_audits.json');
+
+        if (fs.existsSync(filePath)) {
+          const fileData = fs.readFileSync(filePath, 'utf-8');
+          const parsed = JSON.parse(fileData);
+          if (Array.isArray(parsed)) {
+            LocalFileLedgerStore.inMemoryAuditCache = parsed;
+            return parsed;
+          }
+        }
+      } catch {
+        // Fallback to memory
+      }
+    }
+
+    LocalFileLedgerStore.inMemoryAuditCache = [];
+    return LocalFileLedgerStore.inMemoryAuditCache;
+  }
+
+  public async saveRunAudit(record: LiveRunAuditRecord): Promise<void> {
+    const audits = await this.getRunAudits();
+    const updated = [record, ...audits.filter((a) => a.auditId !== record.auditId)];
+    LocalFileLedgerStore.inMemoryAuditCache = updated;
+
+    if (typeof window === 'undefined') {
+      if (process.env.VERCEL) {
+        return;
+      }
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const dataDir = path.join(process.cwd(), '.data');
+        const filePath = path.join(dataDir, 'live_run_audits.json');
 
         if (!fs.existsSync(dataDir)) {
           fs.mkdirSync(dataDir, { recursive: true });
@@ -192,6 +249,67 @@ export class DatabaseLedgerStore implements ILedgerStore {
     }
   }
 
+  public async getRunAudits(): Promise<LiveRunAuditRecord[]> {
+    if (typeof window === 'undefined') {
+      let client: Client | null = null;
+      try {
+        client = new Client({ connectionString: this.connectionString });
+        await client.connect();
+        const res = await client.query('SELECT payload FROM live_run_audits ORDER BY timestamp DESC');
+        await client.end();
+        if (res.rows && res.rows.length > 0) {
+          return res.rows.map((row: any) => row.payload);
+        }
+        return [];
+      } catch (err: any) {
+        const sanitized = sanitizeDbError(err);
+        console.error(`[DatabaseLedgerStore] Persistent database query run audits failed: ${sanitized}`);
+        if (client) {
+          try {
+            await client.end();
+          } catch {}
+        }
+        return [];
+      }
+    }
+    return [];
+  }
+
+  public async saveRunAudit(record: LiveRunAuditRecord): Promise<void> {
+    if (typeof window === 'undefined') {
+      let client: Client | null = null;
+      try {
+        client = new Client({ connectionString: this.connectionString });
+        await client.connect();
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS live_run_audits (
+            audit_id VARCHAR(64) PRIMARY KEY,
+            timestamp TIMESTAMPTZ NOT NULL,
+            status VARCHAR(32) NOT NULL,
+            payload JSONB NOT NULL
+          );
+        `);
+        await client.query(
+          `INSERT INTO live_run_audits (audit_id, timestamp, status, payload)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (audit_id) DO UPDATE SET payload = EXCLUDED.payload;`,
+          [record.auditId, record.timestamp, record.status, JSON.stringify(record)]
+        );
+        await client.end();
+        return;
+      } catch (err: any) {
+        const sanitized = sanitizeDbError(err);
+        console.error(`[DatabaseLedgerStore] Persistent database write run audit failed: ${sanitized}`);
+        if (client) {
+          try {
+            await client.end();
+          } catch {}
+        }
+        throw new Error(`Persistent database write run audit failed: ${sanitized}`);
+      }
+    }
+  }
+
   public async getCompetitionMetrics(isDemoFilter: boolean = false): Promise<CompetitionLogMetrics> {
     const receipts = await this.getReceipts();
     return computeMetricsFromReceipts(receipts, isDemoFilter);
@@ -266,6 +384,14 @@ export class PersistentStore implements ILedgerStore {
 
   public saveReceipt(receipt: DecisionReceipt): Promise<void> {
     return getLedgerStore().saveReceipt(receipt);
+  }
+
+  public getRunAudits(): Promise<LiveRunAuditRecord[]> {
+    return getLedgerStore().getRunAudits();
+  }
+
+  public saveRunAudit(record: LiveRunAuditRecord): Promise<void> {
+    return getLedgerStore().saveRunAudit(record);
   }
 
   public getCompetitionMetrics(isDemoFilter: boolean = false): Promise<CompetitionLogMetrics> {

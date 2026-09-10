@@ -10,13 +10,14 @@ export async function GET(request: Request) {
   const receipts = await store.getReceipts();
   const filtered = receipts.filter((r) => r.isDemoData === isDemo);
   const metrics = await store.getCompetitionMetrics(isDemo);
+  const audits = await store.getRunAudits();
   const storageInfo = getLedgerStoreInfo();
 
   return NextResponse.json({
     success: true,
     receipts: filtered,
     metrics,
+    audits,
     storageInfo,
   });
 }
-

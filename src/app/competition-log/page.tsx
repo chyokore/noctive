@@ -2,16 +2,21 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { DecisionReceipt, CompetitionLogMetrics } from '@/types/domain';
+import { DecisionReceipt, CompetitionLogMetrics, LiveRunAuditRecord } from '@/types/domain';
 import {
   Trophy,
   ShieldCheck,
   ArrowRight,
+  Activity,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
 } from 'lucide-react';
 
 export default function CompetitionLogPage() {
   const [activeTab, setActiveTab] = useState<'COMPETITION' | 'DEMO'>('COMPETITION');
   const [receipts, setReceipts] = useState<DecisionReceipt[]>([]);
+  const [audits, setAudits] = useState<LiveRunAuditRecord[]>([]);
   const [metrics, setMetrics] = useState<CompetitionLogMetrics | null>(null);
   const [storageInfo, setStorageInfo] = useState<{
     storeType: string;
@@ -27,6 +32,7 @@ export default function CompetitionLogPage() {
         const data = await res.json();
         if (data.success) {
           setReceipts(data.receipts || []);
+          setAudits(data.audits || []);
           setMetrics(data.metrics || null);
           if (data.storageInfo) {
             setStorageInfo(data.storageInfo);
@@ -68,7 +74,7 @@ export default function CompetitionLogPage() {
             )}
           </div>
           <p className="text-xs text-slate-400 font-mono mt-1">
-            Auditable paper-trading execution statistics, win rate, cumulative PnL, and decision ledger (Read-Only Judge View).
+            Auditable paper-trading execution statistics, live verification run audit, and persistent decision ledger (Read-Only Judge View).
           </p>
         </div>
 
@@ -163,7 +169,79 @@ export default function CompetitionLogPage() {
         </div>
       )}
 
-      {/* Decisions History Table */}
+      {/* SECTION 1: Persistent Live Verification Run Log */}
+      {activeTab === 'COMPETITION' && (
+        <div className="bg-navy-900 border border-navy-800 rounded-2xl p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-navy-800 pb-3 gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <Activity className="w-5 h-5 text-electric-400" />
+                <h2 className="font-sans font-bold text-base text-white">Live Verification Run Log</h2>
+                <span className="px-2 py-0.5 rounded bg-electric-500/10 border border-electric-500/30 text-electric-400 text-xs font-mono font-medium">
+                  CRON AUDIT
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 font-mono mt-1">
+                Persistent audit log of every protected scheduled cycle check. Note: A SAFE SKIP is an operational verification event, not a simulated trade, and does not alter portfolio performance metrics.
+              </p>
+            </div>
+            <span className="text-xs font-mono text-slate-400 whitespace-nowrap">{audits.length} Audit Records</span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs font-mono">
+              <thead>
+                <tr className="border-b border-navy-800 text-slate-400">
+                  <th className="pb-2">Timestamp</th>
+                  <th className="pb-2">Status</th>
+                  <th className="pb-2">Event Source</th>
+                  <th className="pb-2">Market Source</th>
+                  <th className="pb-2">Qwen Invoked</th>
+                  <th className="pb-2">Decision Created</th>
+                  <th className="pb-2">Detail / Safe Skip Reason</th>
+                  <th className="pb-2 text-right">Audit Hash</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-navy-800/60">
+                {audits.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-6 text-center text-slate-400">
+                      No run-audit records logged yet. Scheduled Vercel cron cycles or run-live-competition-cycle script will populate run audits automatically.
+                    </td>
+                  </tr>
+                ) : (
+                  audits.map((audit) => (
+                    <tr key={audit.auditId} className="hover:bg-navy-850/50">
+                      <td className="py-3 text-slate-400">{new Date(audit.timestamp).toLocaleTimeString()}</td>
+                      <td className="py-3">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            audit.status === 'QUALIFIED'
+                              ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
+                              : audit.status === 'SAFE_SKIP'
+                              ? 'bg-sky-500/10 border border-sky-500/30 text-sky-400'
+                              : 'bg-amber-500/10 border border-amber-500/30 text-amber-400'
+                          }`}
+                        >
+                          {audit.status.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td className="py-3 text-slate-300">{audit.eventProviderDomain}</td>
+                      <td className="py-3 text-slate-300">{audit.marketProviderDomain}</td>
+                      <td className="py-3 text-slate-300">{audit.qwenInvoked ? 'YES' : 'NO'}</td>
+                      <td className="py-3 text-slate-300">{audit.decisionCreated ? 'YES' : 'NO'}</td>
+                      <td className="py-3 text-slate-400 max-w-xs truncate">{audit.safeSkipReason || 'Verified Live Market Decision Created'}</td>
+                      <td className="py-3 text-right font-bold text-electric-400">{audit.hash}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* SECTION 2: Competition Paper Executions */}
       <div className="bg-navy-900 border border-navy-800 rounded-2xl p-6 space-y-4">
         <div className="flex items-center justify-between border-b border-navy-800 pb-3">
           <div>
@@ -172,12 +250,12 @@ export default function CompetitionLogPage() {
             </h2>
             <p className="text-xs text-slate-400 font-mono">
               {activeTab === 'COMPETITION'
-                ? 'Durable persistent ledger recording live agent proposals and risk checks.'
+                ? 'Durable persistent ledger recording qualified live agent proposals and risk checks.'
                 : 'Isolated pre-seeded hackathon evaluation test cases.'}
             </p>
           </div>
 
-          <span className="text-xs font-mono text-slate-400">{receipts.length} Records</span>
+          <span className="text-xs font-mono text-slate-400">{receipts.length} Executions</span>
         </div>
 
         <div className="overflow-x-auto">
@@ -200,7 +278,7 @@ export default function CompetitionLogPage() {
                 <tr>
                   <td colSpan={9} className="py-8 text-center text-slate-400">
                     {activeTab === 'COMPETITION'
-                      ? 'No live external competition paper records created yet. Scheduled Vercel cron or run-live-competition-cycle script will populate live entries upon receiving qualifying external events.'
+                      ? 'No live external competition paper records created yet. Competition paper records are exclusive to verified live external events + verified matching Bitget rToken equity market snapshots.'
                       : 'No demo records found.'}
                   </td>
                 </tr>

@@ -24,6 +24,7 @@ import { AgentEngine } from '../src/lib/engine/agentEngine';
 import { RiskEngine } from '../src/lib/engine/riskEngine';
 import { PaperExchange } from '../src/lib/engine/paperExchange';
 import { ReceiptGenerator } from '../src/lib/engine/receiptGenerator';
+import { createRunAuditRecord } from '../src/lib/engine/runAuditGenerator';
 import { INITIAL_RISK_BUDGET } from '../src/lib/store/noctiveStore';
 import { PersistentStore } from '../src/lib/store/persistentStore';
 
@@ -56,11 +57,22 @@ async function runLiveCompetitionCycle() {
   console.log(`Mapped SEC Eligible Equity Events Found: ${events.length}`);
 
   if (events.length === 0 && watchlist.length === 0) {
+    const audit = createRunAuditRecord({
+      status: 'SAFE_SKIP',
+      eventProviderStatus: 'NO_EVENTS',
+      marketProviderStatus: 'UNVERIFIED_EQUITY_MARKET',
+      qwenInvoked: false,
+      decisionCreated: false,
+      safeSkipReason: NO_MARKET_SKIP_REASON,
+    });
+    await store.saveRunAudit(audit);
+
     console.log('\n----------------------------------------------------');
     console.log('Mapped SEC Issuer Ticker: None retrieved in current window');
     console.log('Mapped rToken: None');
     console.log('Confirmed Bitget Market Symbol: None found on Bitget public API');
     console.log(`Safe Skip Reason: ${NO_MARKET_SKIP_REASON}`);
+    console.log(`Run Audit Hash: ${audit.hash} (ID: ${audit.auditId})`);
     console.log('----------------------------------------------------');
     console.log('\n====================================================');
     console.log(`🛑 FAIL-CLOSED: ${NO_MARKET_SKIP_REASON}`);
@@ -80,7 +92,20 @@ async function runLiveCompetitionCycle() {
     console.log(`Confirmed Bitget Market Symbol: ${market?.confirmedMarketSymbol || 'NOT_FOUND_ON_BITGET'}`);
 
     if (!market) {
+      const audit = createRunAuditRecord({
+        status: 'SAFE_SKIP',
+        eventProviderStatus: 'HEALTHY',
+        marketProviderStatus: 'UNVERIFIED_EQUITY_MARKET',
+        qwenInvoked: false,
+        decisionCreated: false,
+        safeSkipReason: NO_MARKET_SKIP_REASON,
+        mappedIssuerTicker: liveEvt.issuerTicker,
+        mappedRToken: evt.affectedSymbol,
+      });
+      await store.saveRunAudit(audit);
+
       console.log(`Safe Skip Reason: ${NO_MARKET_SKIP_REASON}`);
+      console.log(`Run Audit Saved: ${audit.hash} (ID: ${audit.auditId})`);
       console.log(`----------------------------------------------------`);
       continue;
     }
@@ -106,7 +131,21 @@ async function runLiveCompetitionCycle() {
 
     const receipt = receiptGenerator.generateReceipt(evt, market, decision, risk, order);
     await store.saveReceipt(receipt);
+
+    const audit = createRunAuditRecord({
+      status: 'QUALIFIED',
+      eventProviderStatus: 'HEALTHY',
+      marketProviderStatus: 'HEALTHY',
+      qwenInvoked: true,
+      decisionCreated: true,
+      mappedIssuerTicker: liveEvt.issuerTicker,
+      mappedRToken: evt.affectedSymbol,
+      confirmedMarketSymbol: market.confirmedMarketSymbol,
+    });
+    await store.saveRunAudit(audit);
+
     console.log(`Receipt Saved to Competition Ledger! Hash: ${receipt.hash} (ID: ${receipt.receiptId}, isDemoData: ${receipt.isDemoData})`);
+    console.log(`Run Audit Saved: ${audit.hash} (ID: ${audit.auditId})`);
   }
 
   if (executedCount === 0) {
