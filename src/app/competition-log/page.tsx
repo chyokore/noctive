@@ -117,7 +117,7 @@ export default function CompetitionLogPage() {
               </span>
             </div>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              Read-Only Inputs: SEC EDGAR 8-K Atom Feed &amp; Bitget Public Spot Tickers API. Zero account/key/wallet dependency.
+              Read-Only Inputs: SEC EDGAR 8-K Atom Feed &amp; Stooq / Bitget Public APIs. Zero account/key/wallet dependency.
             </p>
           </div>
         </div>
@@ -129,7 +129,7 @@ export default function CompetitionLogPage() {
           <div className="h-6 w-px bg-navy-800" />
           <div>
             <span className="block text-[10px] uppercase text-slate-400">Market Source</span>
-            <span className="text-slate-200">Bitget Public Spot API</span>
+            <span className="text-slate-200">Stooq / Bitget Public APIs</span>
           </div>
         </div>
       </div>
