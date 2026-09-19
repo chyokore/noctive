@@ -5,6 +5,7 @@ import { IMarketDataProvider } from './marketDataProvider';
 export interface BitgetMcpConfig {
   baseUrl?: string;
   timeoutMs?: number;
+  confirmedToolName?: string;
 }
 
 export const BITGET_MCP_DEFAULT_URL = 'https://agent.bitget.com/mcp';
@@ -20,37 +21,37 @@ export const BITGET_MCP_STOCK_MAPPINGS: Record<string, McpStockMapping> = {
   rNVDA: {
     rToken: 'rNVDA',
     stockSymbol: 'NVDA',
-    name: 'NVIDIA Corp (Bitget MCP Stock Reference)',
+    name: 'NVIDIA Corp (Bitget MCP Reference)',
     issuerTicker: 'NVDA',
   },
   rAAPL: {
     rToken: 'rAAPL',
     stockSymbol: 'AAPL',
-    name: 'Apple Inc (Bitget MCP Stock Reference)',
+    name: 'Apple Inc (Bitget MCP Reference)',
     issuerTicker: 'AAPL',
   },
   rMSFT: {
     rToken: 'rMSFT',
     stockSymbol: 'MSFT',
-    name: 'Microsoft Corp (Bitget MCP Stock Reference)',
+    name: 'Microsoft Corp (Bitget MCP Reference)',
     issuerTicker: 'MSFT',
   },
   rTSLA: {
     rToken: 'rTSLA',
     stockSymbol: 'TSLA',
-    name: 'Tesla Inc (Bitget MCP Stock Reference)',
+    name: 'Tesla Inc (Bitget MCP Reference)',
     issuerTicker: 'TSLA',
   },
   rSPY: {
     rToken: 'rSPY',
     stockSymbol: 'SPY',
-    name: 'SPDR S&P 500 ETF (Bitget MCP Stock Reference)',
+    name: 'SPDR S&P 500 ETF (Bitget MCP Reference)',
     issuerTicker: 'SPY',
   },
   rQQQ: {
     rToken: 'rQQQ',
     stockSymbol: 'QQQ',
-    name: 'Invesco QQQ Trust (Bitget MCP Stock Reference)',
+    name: 'Invesco QQQ Trust (Bitget MCP Reference)',
     issuerTicker: 'QQQ',
   },
 };
@@ -70,23 +71,92 @@ export interface MarketContextWithMcpProvenance extends MarketContext {
 export class BitgetMcpMarketDataProvider implements IMarketDataProvider {
   private baseUrl: string;
   private timeoutMs: number;
+  private confirmedToolName: string | null;
 
   constructor(config: BitgetMcpConfig = {}) {
     this.baseUrl = config.baseUrl || BITGET_MCP_DEFAULT_URL;
     this.timeoutMs = config.timeoutMs || 5000;
+    this.confirmedToolName = config.confirmedToolName || null;
+  }
+
+  /**
+   * Discover available tools via standard MCP tools/list protocol.
+   * Returns confirmed matching tool name or null if unavailable.
+   */
+  async discoverTool(): Promise<string | null> {
+    if (this.confirmedToolName) {
+      return this.confirmedToolName;
+    }
+
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+
+      const payload = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/list',
+        params: {},
+      };
+
+      const res = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timer));
+
+      if (!res.ok) return null;
+
+      const body = await res.json();
+      if (!body || body.error || !body.result || !Array.isArray(body.result.tools)) {
+        return null;
+      }
+
+      const tools: Array<{ name: string; description?: string }> = body.result.tools;
+      const stockTool = tools.find(
+        (t) =>
+          t.name.toLowerCase().includes('stock') ||
+          t.name.toLowerCase().includes('quote') ||
+          t.name.toLowerCase().includes('market') ||
+          t.name.toLowerCase().includes('ticker')
+      );
+
+      if (stockTool) {
+        this.confirmedToolName = stockTool.name;
+        return stockTool.name;
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   async getWatchlist(): Promise<MarketContext[]> {
+    const retrievedAtTimestamp = new Date().toISOString();
+
+    // Protocol requirement: Only use a tool name returned by server tools/list
+    const activeToolName = await this.discoverTool();
+    if (!activeToolName) {
+      console.warn(
+        `[BitgetMcpMarketDataProvider] Bitget MCP verification pending/unavailable — no MCP market data used.`
+      );
+      return [];
+    }
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    const retrievedAtTimestamp = new Date().toISOString();
 
     try {
       const payload = {
         jsonrpc: '2.0',
         method: 'tools/call',
         params: {
-          name: 'get_us_stock_quote',
+          name: activeToolName,
           arguments: {
             symbols: ['NVDA', 'AAPL', 'MSFT', 'TSLA', 'SPY', 'QQQ'],
           },
@@ -116,7 +186,6 @@ export class BitgetMcpMarketDataProvider implements IMarketDataProvider {
         throw new Error(`Bitget MCP response error: ${body?.error?.message || 'unknown error'}`);
       }
 
-      // Extract content or result from JSON-RPC 2.0 response
       let quotes: Array<{
         symbol: string;
         price?: number | string;
@@ -130,7 +199,6 @@ export class BitgetMcpMarketDataProvider implements IMarketDataProvider {
       if (body.result && Array.isArray(body.result.quotes)) {
         quotes = body.result.quotes;
       } else if (body.result && Array.isArray(body.result.content)) {
-        // Parse MCP text content if returned as formatted text/json
         const textContent = body.result.content.find((c: any) => c.type === 'text')?.text;
         if (textContent) {
           try {
@@ -178,7 +246,7 @@ export class BitgetMcpMarketDataProvider implements IMarketDataProvider {
           publisherName: 'Bitget Official MCP US Stock Server (Read-Only)',
           retrievedAtTimestamp,
           dataAsOfTimestamp: dataAsOf,
-          symbolMapping: `SEC Issuer: ${mapping.issuerTicker} -> Bitget MCP Tool: get_us_stock_quote -> Conceptual rToken: ${mapping.rToken}`,
+          symbolMapping: `SEC Issuer: ${mapping.issuerTicker} -> Bitget MCP Tool: ${activeToolName} -> Conceptual rToken: ${mapping.rToken}`,
           conceptualRTokenSymbol: mapping.rToken,
           underlyingStockSymbol: mapping.stockSymbol,
           rawPrice: currentPrice,
@@ -209,7 +277,7 @@ export class BitgetMcpMarketDataProvider implements IMarketDataProvider {
       return items;
     } catch (err: any) {
       clearTimeout(timer);
-      console.warn(`[BitgetMcpMarketDataProvider] MCP query unavailable (${err.message}). Fail closed.`);
+      console.warn(`[BitgetMcpMarketDataProvider] MCP verification pending/unavailable — no MCP market data used. (${err.message})`);
       return [];
     }
   }

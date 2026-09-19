@@ -84,7 +84,7 @@ describe('Bitget MCP Market Data Provider (https://agent.bitget.com/mcp)', () =>
       text: async () => JSON.stringify(mockMcpResponse),
     });
 
-    const provider = new BitgetMcpMarketDataProvider({ timeoutMs: 3000 });
+    const provider = new BitgetMcpMarketDataProvider({ timeoutMs: 3000, confirmedToolName: 'get_us_stock_quote' });
     const watchlist = await provider.getWatchlist();
 
     expect(watchlist.length).toBe(2);
