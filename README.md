@@ -41,6 +41,15 @@ npx tsx scripts/test-qwen-connection.ts
 
 ---
 
+## 🌐 Bitget Official MCP US-Stock Data Provider
+
+Noctive integrates Bitget's official read-only MCP server (`https://agent.bitget.com/mcp`) for US-stock quotes and fundamentals:
+- **Primary Market Provider**: `BitgetMcpMarketDataProvider` targets `https://agent.bitget.com/mcp` using JSON-RPC 2.0 tool calls (`get_stock_quote`, `get_ticker_details`).
+- **Fail-Closed Guarantee**: If the MCP endpoint or downstream network is unavailable, Noctive strictly fails closed—logging a `SAFE_SKIP` audit record without creating fake trade receipts.
+- **Explicit Provenance Data Mode**: `BITGET_MCP_US_STOCKS_READ_ONLY` marks receipts generated from verified Bitget MCP market inputs.
+
+---
+
 ## 💾 Storage Architecture (`ILedgerStore`)
 
 Noctive features a dual-mode persistent storage abstraction:

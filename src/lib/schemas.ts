@@ -119,7 +119,7 @@ export const ExternalInputProvenanceSchema = z.object({
   rawPrice: z.number().optional(),
   dataAsOfTimestamp: z.string().optional(),
   contentHash: z.string().min(1),
-  dataMode: z.enum(['LIVE_EXTERNAL', 'LIVE_EXTERNAL_UNDERLYING_REFERENCE', 'DEMO_DATA']),
+  dataMode: z.enum(['BITGET_MCP_US_STOCKS_READ_ONLY', 'LIVE_EXTERNAL', 'LIVE_EXTERNAL_UNDERLYING_REFERENCE', 'DEMO_DATA']),
 });
 
 export const LivePipelineStatusSchema = z.object({
@@ -154,7 +154,7 @@ export const LiveRunAuditRecordSchema = z.object({
 });
 
 export const DataProvenanceSchema = z.object({
-  dataMode: z.enum(['DEMO_DATA', 'MOCK_MARKET_ADAPTER', 'QWEN_CONNECTED', 'LIVE_EXTERNAL', 'LIVE_EXTERNAL_UNDERLYING_REFERENCE']),
+  dataMode: z.enum(['BITGET_MCP_US_STOCKS_READ_ONLY', 'DEMO_DATA', 'MOCK_MARKET_ADAPTER', 'QWEN_CONNECTED', 'LIVE_EXTERNAL', 'LIVE_EXTERNAL_UNDERLYING_REFERENCE']),
   marketSource: z.string(),
   llmSource: z.string(),
   isDemoData: z.boolean(),

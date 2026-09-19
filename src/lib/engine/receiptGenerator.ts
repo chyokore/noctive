@@ -62,14 +62,16 @@ export class ReceiptGenerator {
 
     const provenance: DataProvenance = {
       dataMode: !isDemo
-        ? extProvenance?.dataMode === 'LIVE_EXTERNAL_UNDERLYING_REFERENCE'
+        ? extProvenance?.dataMode === 'BITGET_MCP_US_STOCKS_READ_ONLY'
+          ? 'BITGET_MCP_US_STOCKS_READ_ONLY'
+          : extProvenance?.dataMode === 'LIVE_EXTERNAL_UNDERLYING_REFERENCE'
           ? 'LIVE_EXTERNAL_UNDERLYING_REFERENCE'
           : 'LIVE_EXTERNAL'
         : agentDecision.llmProposal?.providerMode === 'QWEN_LIVE'
         ? 'QWEN_CONNECTED'
         : 'DEMO_DATA',
       marketSource: !isDemo
-        ? extProvenance?.publisherName || 'Bitget Public Spot Tickers API'
+        ? extProvenance?.publisherName || 'Bitget Official MCP US Stock Server (Read-Only)'
         : 'Simulated rToken 24/7 Market Feed',
       llmSource:
         agentDecision.llmProposal?.providerMode === 'QWEN_LIVE'

@@ -7,6 +7,7 @@ import { getLedgerStore } from '@/lib/store/persistentStore';
 import { LiveEventProvider } from '@/lib/adapters/liveEventProvider';
 import { LiveMarketDataProvider } from '@/lib/adapters/liveMarketDataProvider';
 import { StooqMarketDataProvider } from '@/lib/adapters/stooqMarketDataProvider';
+import { BitgetMcpMarketDataProvider } from '@/lib/adapters/bitgetMcpMarketDataProvider';
 import { createRunAuditRecord } from '@/lib/engine/runAuditGenerator';
 import { INITIAL_RISK_BUDGET } from '@/lib/store/noctiveStore';
 import { DecisionReceipt } from '@/types/domain';
@@ -48,17 +49,27 @@ async function handlePaperCycle(request: NextRequest) {
   const store = getLedgerStore();
 
   const liveEventProvider = new LiveEventProvider();
+  const bitgetMcpProvider = new BitgetMcpMarketDataProvider();
   const liveMarketProvider = new LiveMarketDataProvider();
   const stooqMarketProvider = new StooqMarketDataProvider();
 
   const events = await liveEventProvider.getLatestEvents();
-  let watchlist = await liveMarketProvider.getWatchlist();
 
-  let marketProviderDomain = 'api.bitget.com';
+  // Resolution Order: 1. Bitget MCP Server -> 2. Bitget Public Spot API -> 3. Stooq Stock Reference
+  let watchlist = await bitgetMcpProvider.getWatchlist();
+  let marketProviderDomain = 'agent.bitget.com/mcp (Bitget Official MCP US Stock Server)';
+
+  if (watchlist.length === 0) {
+    watchlist = await liveMarketProvider.getWatchlist();
+    if (watchlist.length > 0) {
+      marketProviderDomain = 'api.bitget.com (Bitget Public Spot Tickers API)';
+    }
+  }
+
   if (watchlist.length === 0) {
     watchlist = await stooqMarketProvider.getWatchlist();
     if (watchlist.length > 0) {
-      marketProviderDomain = 'stooq.com';
+      marketProviderDomain = 'stooq.com (Stooq Stock Reference)';
     }
   }
 

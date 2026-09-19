@@ -8,6 +8,7 @@ interface DataProvenanceBadgeProps {
 
 export const DataProvenanceBadge: React.FC<DataProvenanceBadgeProps> = ({ provenance }) => {
   const ext = provenance.externalProvenance;
+  const isMcp = provenance.dataMode === 'BITGET_MCP_US_STOCKS_READ_ONLY';
   const isStooqRef = provenance.dataMode === 'LIVE_EXTERNAL_UNDERLYING_REFERENCE';
 
   return (
@@ -20,14 +21,18 @@ export const DataProvenanceBadge: React.FC<DataProvenanceBadgeProps> = ({ proven
 
         <span
           className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-            isStooqRef
+            isMcp
+              ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
+              : isStooqRef
               ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
               : provenance.isDemoData
               ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
               : 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
           }`}
         >
-          {isStooqRef
+          {isMcp
+            ? 'BITGET OFFICIAL MCP — READ-ONLY US STOCKS'
+            : isStooqRef
             ? 'LIVE EXTERNAL — UNDERLYING REFERENCE'
             : provenance.isDemoData
             ? 'DEMO DATA'
