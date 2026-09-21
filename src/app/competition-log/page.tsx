@@ -117,7 +117,7 @@ export default function CompetitionLogPage() {
               </span>
             </div>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              Read-Only Inputs: SEC EDGAR 8-K Atom Feed &amp; Stooq Reference APIs. (Bitget MCP verification pending/unavailable — no MCP market data used). Zero account/key/wallet dependency.
+              Read-Only Inputs: SEC EDGAR 8-K Atom Feed &amp; Bitget Wallet RWA / Reality — Read-only market data (with Stooq Stock Reference Fallback). Zero account/key/wallet dependency.
             </p>
           </div>
         </div>
@@ -129,7 +129,7 @@ export default function CompetitionLogPage() {
           <div className="h-6 w-px bg-navy-800" />
           <div>
             <span className="block text-[10px] uppercase text-slate-400">Market Source</span>
-            <span className="text-slate-200">Stooq Reference / Bitget Spot API</span>
+            <span className="text-purple-300">Bitget Wallet RWA / Reality</span>
           </div>
         </div>
       </div>

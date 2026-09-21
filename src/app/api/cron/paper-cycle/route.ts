@@ -5,9 +5,8 @@ import { PaperExchange } from '@/lib/engine/paperExchange';
 import { ReceiptGenerator } from '@/lib/engine/receiptGenerator';
 import { getLedgerStore } from '@/lib/store/persistentStore';
 import { LiveEventProvider } from '@/lib/adapters/liveEventProvider';
-import { LiveMarketDataProvider } from '@/lib/adapters/liveMarketDataProvider';
+import { BitgetWalletRwaMarketProvider } from '@/lib/adapters/bitgetWalletRwaMarketProvider';
 import { StooqMarketDataProvider } from '@/lib/adapters/stooqMarketDataProvider';
-import { BitgetMcpMarketDataProvider } from '@/lib/adapters/bitgetMcpMarketDataProvider';
 import { createRunAuditRecord } from '@/lib/engine/runAuditGenerator';
 import { INITIAL_RISK_BUDGET } from '@/lib/store/noctiveStore';
 import { DecisionReceipt } from '@/types/domain';
@@ -49,27 +48,19 @@ async function handlePaperCycle(request: NextRequest) {
   const store = getLedgerStore();
 
   const liveEventProvider = new LiveEventProvider();
-  const bitgetMcpProvider = new BitgetMcpMarketDataProvider();
-  const liveMarketProvider = new LiveMarketDataProvider();
+  const rwaMarketProvider = new BitgetWalletRwaMarketProvider();
   const stooqMarketProvider = new StooqMarketDataProvider();
 
   const events = await liveEventProvider.getLatestEvents();
 
-  // Resolution Order: 1. Bitget MCP Server -> 2. Bitget Public Spot API -> 3. Stooq Stock Reference
-  let watchlist = await bitgetMcpProvider.getWatchlist();
-  let marketProviderDomain = 'agent.bitget.com/mcp (Bitget Official MCP US Stock Server)';
-
-  if (watchlist.length === 0) {
-    watchlist = await liveMarketProvider.getWatchlist();
-    if (watchlist.length > 0) {
-      marketProviderDomain = 'api.bitget.com (Bitget Public Spot Tickers API)';
-    }
-  }
+  // Resolution Order: 1. Bitget Wallet RWA (Reality) -> 2. Stooq Stock Reference Fallback -> 3. Fail-Closed
+  let watchlist = await rwaMarketProvider.getWatchlist();
+  let marketProviderDomain = 'web3.bitget.com (Bitget Wallet RWA / Reality Protocol)';
 
   if (watchlist.length === 0) {
     watchlist = await stooqMarketProvider.getWatchlist();
     if (watchlist.length > 0) {
-      marketProviderDomain = 'stooq.com (Stooq Stock Reference)';
+      marketProviderDomain = 'stooq.com (Stooq Stock Reference Fallback)';
     }
   }
 

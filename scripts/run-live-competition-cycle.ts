@@ -18,10 +18,10 @@ if (fs.existsSync(envLocalPath)) {
   });
 }
 
+import { MarketContext } from '../src/types/domain';
 import { LiveEventProvider, LiveEventItemWithProvenance } from '../src/lib/adapters/liveEventProvider';
-import { LiveMarketDataProvider, MarketContextWithProvenance, RTOKEN_EQUITY_MAPPINGS } from '../src/lib/adapters/liveMarketDataProvider';
+import { BitgetWalletRwaMarketProvider } from '../src/lib/adapters/bitgetWalletRwaMarketProvider';
 import { StooqMarketDataProvider, STOCK_REFERENCE_MAPPINGS } from '../src/lib/adapters/stooqMarketDataProvider';
-import { BitgetMcpMarketDataProvider, BITGET_MCP_STOCK_MAPPINGS } from '../src/lib/adapters/bitgetMcpMarketDataProvider';
 import { AgentEngine } from '../src/lib/engine/agentEngine';
 import { RiskEngine } from '../src/lib/engine/riskEngine';
 import { PaperExchange } from '../src/lib/engine/paperExchange';
@@ -46,53 +46,33 @@ async function runLiveCompetitionCycle() {
   const store = new PersistentStore();
 
   const liveEventProvider = new LiveEventProvider();
-  const bitgetMcpProvider = new BitgetMcpMarketDataProvider();
-  const liveMarketProvider = new LiveMarketDataProvider();
+  const rwaMarketProvider = new BitgetWalletRwaMarketProvider();
   const stooqMarketProvider = new StooqMarketDataProvider();
 
   console.log(`LLM Provider Mode: ${agentEngine.getProviderMode()}`);
   console.log(`LLM Provider Name: ${agentEngine.getProviderName()}`);
   console.log(`Store Type: ${store.storeType}`);
 
-  console.log('\nQuerying Bitget Official MCP Server (https://agent.bitget.com/mcp) for US stock / ETF quotes...');
-  let watchlist = await bitgetMcpProvider.getWatchlist();
-  let marketProviderDomain = 'agent.bitget.com/mcp (Bitget Official MCP US Stock Server)';
+  console.log('\nQuerying Bitget Wallet X RWA / Reality Market Data Provider (web3.bitget.com)...');
+  let watchlist = await rwaMarketProvider.getWatchlist();
+  let marketProviderDomain = 'web3.bitget.com (Bitget Wallet RWA / Reality Protocol)';
 
   if (watchlist.length > 0) {
-    console.log('Verified US Stock Quotes Retrieved from Bitget MCP Server:');
-    Object.values(BITGET_MCP_STOCK_MAPPINGS).forEach((mapping) => {
-      const found = watchlist.find((m) => m.symbol === mapping.rToken);
-      if (found) {
-        console.log(`  ⚡ ${mapping.stockSymbol} -> ${mapping.rToken}: $${found.currentPrice} (Data Mode: BITGET_MCP_US_STOCKS_READ_ONLY)`);
-      }
+    console.log('Verified Reality RWA Contracts Retrieved:');
+    watchlist.forEach((found) => {
+      const ext = (found as any).externalProvenance;
+      console.log(`  ⚡ Ticker: ${ext?.underlyingStockSymbol || found.symbol} -> Symbol: ${found.symbol} -> Chain: ${ext?.chain || 'ethereum'} -> Contract: ${ext?.contractAddress} ($${found.currentPrice}) [data_source=reality]`);
     });
   } else {
-    console.log('Bitget MCP Server returned no data or was unavailable. Falling back to Bitget Public Spot API...');
-    watchlist = await liveMarketProvider.getWatchlist();
-    if (watchlist.length > 0) {
-      marketProviderDomain = 'api.bitget.com (Bitget Public Spot Tickers API)';
-      console.log('Exchange Market Symbol Resolution Results:');
-      Object.values(RTOKEN_EQUITY_MAPPINGS).forEach((mapping) => {
-        const found = watchlist.find((m) => m.symbol === mapping.rToken);
-        if (found) {
-          console.log(`  ✅ ${mapping.rToken} -> ${mapping.exchangeMarketSymbol}: CONFIRMED ($${found.currentPrice})`);
-        } else {
-          console.log(`  🛑 ${mapping.rToken} -> ${mapping.exchangeMarketSymbol}: NOT LISTED ON BITGET SPOT`);
-        }
-      });
-    }
-  }
-
-  if (watchlist.length === 0) {
-    console.log('\nFallback: Querying Stooq for underlying stock reference prices (NVDA.US, AAPL.US, MSFT.US, TSLA.US, SPY.US, QQQ.US)...');
+    console.log('Bitget Wallet RWA Provider returned no active Reality contracts (or auth unavailable). Falling back to Stooq stock reference...');
     watchlist = await stooqMarketProvider.getWatchlist();
     if (watchlist.length > 0) {
-      marketProviderDomain = 'stooq.com (Stooq Stock Reference)';
-      console.log('Underlying Stock Reference Quotes Retrieved from Stooq:');
+      marketProviderDomain = 'stooq.com (Stooq Stock Reference Fallback)';
+      console.log('Stooq Stock Reference Prices Retrieved:');
       Object.values(STOCK_REFERENCE_MAPPINGS).forEach((mapping) => {
         const found = watchlist.find((m) => m.symbol === mapping.rToken);
         if (found) {
-          console.log(`  📈 ${mapping.issuerTicker} (${mapping.underlyingStockSymbol}) -> ${mapping.rToken}: $${found.currentPrice} (Data Mode: LIVE_EXTERNAL_UNDERLYING_REFERENCE)`);
+          console.log(`  📈 ${mapping.rToken} -> ${mapping.underlyingStockSymbol}: $${found.currentPrice} (LIVE_EXTERNAL_UNDERLYING_REFERENCE)`);
         }
       });
     }
@@ -136,7 +116,7 @@ async function runLiveCompetitionCycle() {
 
   for (const evt of events) {
     const liveEvt = evt as LiveEventItemWithProvenance;
-    const market = watchlist.find((m) => m.symbol === evt.affectedSymbol) as (MarketContextWithProvenance & { underlyingStockSymbol?: string }) | undefined;
+    const market = watchlist.find((m) => m.symbol === evt.affectedSymbol) as (MarketContext & { underlyingStockSymbol?: string; confirmedMarketSymbol?: string; externalProvenance?: any }) | undefined;
 
     console.log(`\n----------------------------------------------------`);
     console.log(`Mapped SEC Issuer Ticker: ${liveEvt.issuerTicker || 'N/A'}`);

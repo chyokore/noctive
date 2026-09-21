@@ -8,6 +8,7 @@ interface DataProvenanceBadgeProps {
 
 export const DataProvenanceBadge: React.FC<DataProvenanceBadgeProps> = ({ provenance }) => {
   const ext = provenance.externalProvenance;
+  const isRwaReality = provenance.dataMode === 'BITGET_WALLET_RWA_REALITY_READ_ONLY';
   const isMcp = provenance.dataMode === 'BITGET_MCP_US_STOCKS_READ_ONLY';
   const isStooqRef = provenance.dataMode === 'LIVE_EXTERNAL_UNDERLYING_REFERENCE';
 
@@ -16,21 +17,25 @@ export const DataProvenanceBadge: React.FC<DataProvenanceBadgeProps> = ({ proven
       <div className="flex items-center justify-between border-b border-navy-800 pb-2">
         <span className="text-[10px] text-slate-400 uppercase font-bold flex items-center gap-1.5">
           <Database className="w-3.5 h-3.5 text-electric-400" />
-          Data Provenance & Source Transparency
+          Data Provenance &amp; Source Transparency
         </span>
 
         <span
           className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-            isMcp
+            isRwaReality
+              ? 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
+              : isMcp
               ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
               : isStooqRef
               ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
               : provenance.isDemoData
               ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-              : 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
+              : 'bg-electric-500/10 text-electric-300 border border-electric-500/30'
           }`}
         >
-          {isMcp
+          {isRwaReality
+            ? 'BITGET WALLET RWA / REALITY — READ-ONLY MARKET DATA'
+            : isMcp
             ? 'BITGET OFFICIAL MCP — READ-ONLY US STOCKS'
             : isStooqRef
             ? 'LIVE EXTERNAL — UNDERLYING REFERENCE'
@@ -55,8 +60,14 @@ export const DataProvenanceBadge: React.FC<DataProvenanceBadgeProps> = ({ proven
         <div className="mt-2 pt-2 border-t border-navy-800/60 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
           {ext.underlyingStockSymbol && (
             <div>
-              <span className="text-slate-500 block">Underlying Reference Symbol:</span>
+              <span className="text-slate-500 block">Underlying Reference Ticker:</span>
               <span className="text-emerald-400 font-bold">{ext.underlyingStockSymbol} {ext.rawPrice ? `($${ext.rawPrice})` : ''}</span>
+            </div>
+          )}
+          {ext.contractAddress && (
+            <div>
+              <span className="text-slate-500 block">Chain / Reality Contract:</span>
+              <span className="text-purple-300 font-bold truncate block">{ext.chain}: {ext.contractAddress}</span>
             </div>
           )}
           {ext.sourceUrl && (

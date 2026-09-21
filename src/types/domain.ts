@@ -113,10 +113,14 @@ export interface ExternalInputProvenance {
   conceptualRTokenSymbol?: string;
   exchangeMarketSymbol?: string;
   underlyingStockSymbol?: string;
+  chain?: string;
+  contractAddress?: string;
+  dataSource?: string;
+  traceId?: string;
   rawPrice?: number;
   dataAsOfTimestamp?: string;
   contentHash: string;
-  dataMode: 'BITGET_MCP_US_STOCKS_READ_ONLY' | 'LIVE_EXTERNAL' | 'LIVE_EXTERNAL_UNDERLYING_REFERENCE' | 'DEMO_DATA';
+  dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY' | 'BITGET_MCP_US_STOCKS_READ_ONLY' | 'LIVE_EXTERNAL' | 'LIVE_EXTERNAL_UNDERLYING_REFERENCE' | 'DEMO_DATA';
 }
 
 export interface LivePipelineStatus {
@@ -131,7 +135,7 @@ export interface LivePipelineStatus {
 }
 
 export interface DataProvenance {
-  dataMode: 'BITGET_MCP_US_STOCKS_READ_ONLY' | 'DEMO_DATA' | 'MOCK_MARKET_ADAPTER' | 'QWEN_CONNECTED' | 'LIVE_EXTERNAL' | 'LIVE_EXTERNAL_UNDERLYING_REFERENCE';
+  dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY' | 'BITGET_MCP_US_STOCKS_READ_ONLY' | 'DEMO_DATA' | 'MOCK_MARKET_ADAPTER' | 'QWEN_CONNECTED' | 'LIVE_EXTERNAL' | 'LIVE_EXTERNAL_UNDERLYING_REFERENCE';
   marketSource: string;
   llmSource: string;
   isDemoData: boolean;
