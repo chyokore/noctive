@@ -9,7 +9,7 @@ import { BitgetWalletRwaMarketProvider, APPROVED_EQUITY_WATCHLIST, MarketContext
 import { createRunAuditRecord } from '@/lib/engine/runAuditGenerator';
 import { INITIAL_RISK_BUDGET } from '@/lib/store/noctiveStore';
 import { DecisionReceipt, RealityMarketSnapshot, EventItem, RealityMarketPulse } from '@/types/domain';
-import { evaluateRealityPulse, createPulseEventItem } from '@/lib/engine/realityPulseDetector';
+import { evaluateRealityPulse, evaluate24hRealityPulse, createPulseEventItem } from '@/lib/engine/realityPulseDetector';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -111,10 +111,18 @@ async function handlePaperCycle(request: NextRequest) {
         console.warn(`[CronPaperCycle] Failed to save Reality snapshot for ${ticker}:`, snapErr);
       }
 
-      const detectedPulse = evaluateRealityPulse(prevSnapshot, quote);
-      if (detectedPulse) {
-        const pulseEvent = createPulseEventItem(detectedPulse);
-        pulseCandidates.push({ pulse: detectedPulse, pulseEvent, quote });
+      // Trigger 1: Native 24-Hour API Change Ratio Pulse (API_24H_CHANGE)
+      const detected24hPulse = evaluate24hRealityPulse(quote);
+      if (detected24hPulse) {
+        const pulseEvent = createPulseEventItem(detected24hPulse);
+        pulseCandidates.push({ pulse: detected24hPulse, pulseEvent, quote });
+      }
+
+      // Trigger 2: 30-Minute Snapshot Interval Pulse (SNAPSHOT_30M)
+      const detected30mPulse = evaluateRealityPulse(prevSnapshot, quote);
+      if (detected30mPulse) {
+        const pulseEvent = createPulseEventItem(detected30mPulse);
+        pulseCandidates.push({ pulse: detected30mPulse, pulseEvent, quote });
       }
     }
 

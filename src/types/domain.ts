@@ -118,6 +118,7 @@ export interface ExternalInputProvenance {
   dataSource?: string;
   traceId?: string;
   rawPrice?: number;
+  raw24hChangePct?: number;
   dataAsOfTimestamp?: string;
   contentHash: string;
   dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY' | 'BITGET_MCP_US_STOCKS_READ_ONLY' | 'LIVE_EXTERNAL' | 'LIVE_EXTERNAL_UNDERLYING_REFERENCE' | 'DEMO_DATA';
@@ -338,7 +339,7 @@ export interface RealityMarketPulse {
   prevTimestamp: string;
   currentTimestamp: string;
   intervalMinutes: number;
+  triggerType: 'SNAPSHOT_30M' | 'API_24H_CHANGE';
+  raw24hChangePct?: number;
   traceId?: string;
 }
-
-

@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { evaluateRealityPulse, createPulseEventItem } from '../src/lib/engine/realityPulseDetector';
+import { evaluateRealityPulse, evaluate24hRealityPulse, createPulseEventItem } from '../src/lib/engine/realityPulseDetector';
 import { LocalFileLedgerStore, DatabaseLedgerStore, hasOpenPositionForSymbol } from '../src/lib/store/persistentStore';
 import { RealityMarketSnapshot, DecisionReceipt } from '../src/types/domain';
 import { MarketContextWithRwaProvenance } from '../src/lib/adapters/bitgetWalletRwaMarketProvider';
@@ -242,6 +241,190 @@ describe('Reality Market Pulse Detector & Snapshot Store', () => {
       expect(pulse?.percentageMovePct).toBe(-2.5);
     });
   });
+
+  describe('24-Hour Native Change Pulse Detection (evaluate24hRealityPulse)', () => {
+    it('should TRIGGER 24h pulse when native price_24h_change_ratio is >= 1.5%', () => {
+      const quote: MarketContextWithRwaProvenance = {
+        symbol: 'RNVDA',
+        name: 'NVDA Tokenized Stock',
+        currentPrice: 120.0,
+        prevClose: 117.5,
+        change24hPct: 2.1276, // 2.13% >= 1.5%
+        bidPrice: 119.9,
+        askPrice: 120.1,
+        spreadPct: 0.05,
+        volume24hUsd: 1000000,
+        liquidityDepthIndex: 90,
+        sessionStatus: 'OVERNIGHT_ACTIVE',
+        isDemoData: false,
+        chain: 'morph',
+        contractAddress: '0x111',
+        externalProvenance: {
+          sourceUrl: 'https://bopenapi.bgwapi.io/bgw-pro/market/v3/rwa/stockInfo',
+          publisherName: 'Bitget Wallet RWA / Reality Protocol',
+          retrievedAtTimestamp: new Date().toISOString(),
+          underlyingStockSymbol: 'NVDA',
+          dataSource: 'reality',
+          contentHash: 'hash-24h-1',
+          dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY',
+          raw24hChangePct: 2.1276,
+        },
+      };
+
+      const pulse = evaluate24hRealityPulse(quote);
+      expect(pulse).not.toBeNull();
+      expect(pulse?.ticker).toBe('NVDA');
+      expect(pulse?.triggerType).toBe('API_24H_CHANGE');
+      expect(pulse?.direction).toBe('UP');
+      expect(pulse?.percentageMovePct).toBe(2.13);
+      expect(pulse?.raw24hChangePct).toBe(2.1276);
+
+      const eventItem = createPulseEventItem(pulse!);
+      expect(eventItem.source).toBe('BITGET_REALITY_24H_PULSE');
+      expect(eventItem.title).toContain('Reality 24H Market Pulse: NVDA UP 2.13%');
+      expect(eventItem.affectedSymbol).toBe('NVDA');
+    });
+
+    it('should TRIGGER 24h pulse for DOWN direction when native change is <= -1.5%', () => {
+      const quote: MarketContextWithRwaProvenance = {
+        symbol: 'RAAPL',
+        name: 'AAPL Tokenized Stock',
+        currentPrice: 200.0,
+        prevClose: 204.0,
+        change24hPct: -1.96, // -1.96% <= -1.5%
+        bidPrice: 199.9,
+        askPrice: 200.1,
+        spreadPct: 0.05,
+        volume24hUsd: 1000000,
+        liquidityDepthIndex: 90,
+        sessionStatus: 'OVERNIGHT_ACTIVE',
+        isDemoData: false,
+        chain: 'arbitrum',
+        contractAddress: '0x222',
+        externalProvenance: {
+          sourceUrl: 'https://bopenapi.bgwapi.io/bgw-pro/market/v3/rwa/stockInfo',
+          publisherName: 'Bitget Wallet RWA / Reality Protocol',
+          retrievedAtTimestamp: new Date().toISOString(),
+          underlyingStockSymbol: 'AAPL',
+          dataSource: 'reality',
+          contentHash: 'hash-24h-2',
+          dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY',
+          raw24hChangePct: -1.96,
+        },
+      };
+
+      const pulse = evaluate24hRealityPulse(quote);
+      expect(pulse).not.toBeNull();
+      expect(pulse?.ticker).toBe('AAPL');
+      expect(pulse?.triggerType).toBe('API_24H_CHANGE');
+      expect(pulse?.direction).toBe('DOWN');
+      expect(pulse?.percentageMovePct).toBe(-1.96);
+    });
+
+    it('should REJECT 24h pulse when native change is less than 1.5%', () => {
+      const quote: MarketContextWithRwaProvenance = {
+        symbol: 'RMSFT',
+        name: 'MSFT Tokenized Stock',
+        currentPrice: 400.0,
+        prevClose: 396.0,
+        change24hPct: 1.01, // 1.01% < 1.5%
+        bidPrice: 399.9,
+        askPrice: 400.1,
+        spreadPct: 0.05,
+        volume24hUsd: 1000000,
+        liquidityDepthIndex: 90,
+        sessionStatus: 'OVERNIGHT_ACTIVE',
+        isDemoData: false,
+        chain: 'morph',
+        contractAddress: '0x333',
+        externalProvenance: {
+          sourceUrl: 'https://bopenapi.bgwapi.io/bgw-pro/market/v3/rwa/stockInfo',
+          publisherName: 'Bitget Wallet RWA / Reality Protocol',
+          retrievedAtTimestamp: new Date().toISOString(),
+          underlyingStockSymbol: 'MSFT',
+          dataSource: 'reality',
+          contentHash: 'hash-24h-3',
+          dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY',
+          raw24hChangePct: 1.01,
+        },
+      };
+
+      const pulse = evaluate24hRealityPulse(quote);
+      expect(pulse).toBeNull();
+    });
+
+    it('should REJECT 24h pulse when change24hPct or raw24hChangePct is missing or invalid', () => {
+      const quoteNoField: MarketContextWithRwaProvenance = {
+        symbol: 'RSPY',
+        name: 'SPY Tokenized Stock',
+        currentPrice: 500.0,
+        prevClose: 500.0,
+        bidPrice: 499.9,
+        askPrice: 500.1,
+        spreadPct: 0.05,
+        volume24hUsd: 1000000,
+        liquidityDepthIndex: 90,
+        sessionStatus: 'OVERNIGHT_ACTIVE',
+        isDemoData: false,
+        chain: 'morph',
+        contractAddress: '0x444',
+        externalProvenance: {
+          sourceUrl: 'https://bopenapi.bgwapi.io/bgw-pro/market/v3/rwa/stockInfo',
+          publisherName: 'Bitget Wallet RWA / Reality Protocol',
+          retrievedAtTimestamp: new Date().toISOString(),
+          underlyingStockSymbol: 'SPY',
+          dataSource: 'reality',
+          contentHash: 'hash-24h-4',
+          dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY',
+        },
+      };
+
+      expect(evaluate24hRealityPulse(quoteNoField)).toBeNull();
+
+      const quoteNaN: MarketContextWithRwaProvenance = {
+        ...quoteNoField,
+        change24hPct: NaN,
+        externalProvenance: {
+          ...quoteNoField.externalProvenance,
+          raw24hChangePct: NaN,
+        },
+      };
+
+      expect(evaluate24hRealityPulse(quoteNaN)).toBeNull();
+    });
+
+    it('should REJECT 24h pulse when market status is CLOSED', () => {
+      const quoteClosed: MarketContextWithRwaProvenance = {
+        symbol: 'RQQQ',
+        name: 'QQQ Tokenized Stock',
+        currentPrice: 450.0,
+        prevClose: 440.0,
+        change24hPct: 2.27,
+        bidPrice: 449.9,
+        askPrice: 450.1,
+        spreadPct: 0.05,
+        volume24hUsd: 1000000,
+        liquidityDepthIndex: 90,
+        sessionStatus: 'CLOSED', // Market is CLOSED
+        isDemoData: false,
+        chain: 'morph',
+        contractAddress: '0x555',
+        externalProvenance: {
+          sourceUrl: 'https://bopenapi.bgwapi.io/bgw-pro/market/v3/rwa/stockInfo',
+          publisherName: 'Bitget Wallet RWA / Reality Protocol',
+          retrievedAtTimestamp: new Date().toISOString(),
+          underlyingStockSymbol: 'QQQ',
+          dataSource: 'reality',
+          contentHash: 'hash-24h-5',
+          dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY',
+          raw24hChangePct: 2.27,
+        },
+      };
+
+      expect(evaluate24hRealityPulse(quoteClosed)).toBeNull();
+    });
+  });
+
 
   describe('Open Position Guard & Fail-Closed Logic for Pulses', () => {
     it('should block paper trade generation when an open position exists for pulse ticker', () => {

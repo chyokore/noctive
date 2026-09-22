@@ -21,6 +21,28 @@ export function rankChain(chain: string): number {
   return 2;
 }
 
+export function parse24hChangeRatio(infoObj: any): number | undefined {
+  if (!infoObj || typeof infoObj !== 'object') return undefined;
+
+  const candidate =
+    infoObj.price_24h_change_ratio ??
+    infoObj.price24hChangeRatio ??
+    infoObj.price_24h_change ??
+    infoObj.price24hChange ??
+    infoObj.change_24h_ratio ??
+    infoObj.change24hPct ??
+    infoObj.change_24h_pct;
+
+  if (candidate === undefined || candidate === null || candidate === '') return undefined;
+  const num = parseFloat(String(candidate));
+  if (isNaN(num)) return undefined;
+
+  if (Math.abs(num) <= 1.0 && num !== 0) {
+    return parseFloat((num * 100).toFixed(4));
+  }
+  return parseFloat(num.toFixed(4));
+}
+
 export interface BitgetRwaStockItem {
   ticker: string;
   chain: string;
@@ -530,8 +552,10 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
         (res.headers && typeof res.headers.get === 'function' ? res.headers.get('x-trace-id') || res.headers.get('trace-id') : '') ||
         ''
       ).replace(/[^a-zA-Z0-9_-]/g, '');
+
+      const parsed24hChange = parse24hChangeRatio(infoObj);
+      const change24hPct = parsed24hChange !== undefined ? parsed24hChange : 0;
       const prevClose = latestPrice;
-      const change24hPct = 0;
       const spreadPct = 0.05;
       const bidPrice = parseFloat((latestPrice * 0.9998).toFixed(2));
       const askPrice = parseFloat((latestPrice * 1.0002).toFixed(2));
@@ -557,6 +581,7 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
         dataSource: 'reality',
         traceId: respTraceId,
         rawPrice: latestPrice,
+        raw24hChangePct: parsed24hChange,
         contentHash,
         dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY',
       };
