@@ -399,4 +399,26 @@ export class PersistentStore implements ILedgerStore {
   }
 }
 
+export function hasOpenPositionForSymbol(receipts: DecisionReceipt[], symbolOrTicker: string): boolean {
+  if (!Array.isArray(receipts) || receipts.length === 0) return false;
+  const norm = symbolOrTicker.toUpperCase().replace(/^R/, '');
+
+  return receipts.some((r) => {
+    if (r.status !== 'APPROVED_EXECUTED') return false;
+    if (r.paperOrder?.status !== 'SIMULATED_FILLED') return false;
+    if (r.paperOrder?.side !== 'BUY' && r.paperOrder?.side !== 'SELL') return false;
+
+    const rSymbol = (
+      r.paperOrder?.symbol ||
+      r.marketContext?.symbol ||
+      r.event?.affectedSymbol ||
+      ''
+    )
+      .toUpperCase()
+      .replace(/^R/, '');
+
+    return rSymbol === norm;
+  });
+}
+
 

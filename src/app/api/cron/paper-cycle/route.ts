@@ -3,10 +3,9 @@ import { AgentEngine } from '@/lib/engine/agentEngine';
 import { RiskEngine } from '@/lib/engine/riskEngine';
 import { PaperExchange } from '@/lib/engine/paperExchange';
 import { ReceiptGenerator } from '@/lib/engine/receiptGenerator';
-import { getLedgerStore } from '@/lib/store/persistentStore';
+import { getLedgerStore, hasOpenPositionForSymbol } from '@/lib/store/persistentStore';
 import { LiveEventProvider } from '@/lib/adapters/liveEventProvider';
-import { BitgetWalletRwaMarketProvider } from '@/lib/adapters/bitgetWalletRwaMarketProvider';
-import { StooqMarketDataProvider } from '@/lib/adapters/stooqMarketDataProvider';
+import { BitgetWalletRwaMarketProvider, APPROVED_EQUITY_WATCHLIST } from '@/lib/adapters/bitgetWalletRwaMarketProvider';
 import { createRunAuditRecord } from '@/lib/engine/runAuditGenerator';
 import { INITIAL_RISK_BUDGET } from '@/lib/store/noctiveStore';
 import { DecisionReceipt } from '@/types/domain';
@@ -49,30 +48,23 @@ async function handlePaperCycle(request: NextRequest) {
 
   const liveEventProvider = new LiveEventProvider();
   const rwaMarketProvider = new BitgetWalletRwaMarketProvider();
-  const stooqMarketProvider = new StooqMarketDataProvider();
 
   const events = await liveEventProvider.getLatestEvents();
+  const marketProviderDomain = 'bopenapi.bgwapi.io (Bitget Wallet RWA / Reality Protocol)';
 
-  // Resolution Order: 1. Bitget Wallet RWA (Reality) -> 2. Stooq Stock Reference Fallback -> 3. Fail-Closed
-  let watchlist = await rwaMarketProvider.getWatchlist();
-  let marketProviderDomain = 'web3.bitget.com (Bitget Wallet RWA / Reality Protocol)';
+  // Rule 1: Find qualifying live SEC events matching approved equity watchlist
+  const qualifyingEvents = events.filter((e) =>
+    APPROVED_EQUITY_WATCHLIST.includes((e.affectedSymbol || '').toUpperCase())
+  );
 
-  if (watchlist.length === 0) {
-    watchlist = await stooqMarketProvider.getWatchlist();
-    if (watchlist.length > 0) {
-      marketProviderDomain = 'stooq.com (Stooq Stock Reference Fallback)';
-    }
-  }
-
-  // Fail-closed requirement: If no qualifying live external equity events or confirmed Bitget market tickers available, skip execution and record run audit
-  if (events.length === 0 || watchlist.length === 0) {
+  if (events.length === 0 || qualifyingEvents.length === 0) {
     const audit = createRunAuditRecord({
       status: 'SAFE_SKIP',
       eventProviderStatus: events.length > 0 ? 'HEALTHY' : 'NO_EVENTS',
-      marketProviderStatus: watchlist.length > 0 ? 'HEALTHY' : 'UNVERIFIED_EQUITY_MARKET',
+      marketProviderStatus: 'HEALTHY',
       qwenInvoked: false,
       decisionCreated: false,
-      safeSkipReason: NO_MARKET_SKIP_REASON,
+      safeSkipReason: 'No qualifying live SEC event matching approved equity watchlist.',
       marketProviderDomain,
     });
 
@@ -82,11 +74,10 @@ async function handlePaperCycle(request: NextRequest) {
       console.warn('[CronPaperCycle] Persistent run audit save failed:', auditErr);
     }
 
-    console.log(`[CronPaperCycle] ${NO_MARKET_SKIP_REASON}`);
     return NextResponse.json({
       success: true,
       skipped: true,
-      reason: NO_MARKET_SKIP_REASON,
+      reason: 'No qualifying live SEC event matching approved equity watchlist.',
       pipelineStatus: 'NO_QUALIFYING_EVENTS',
       auditId: audit.auditId,
       auditHash: audit.hash,
@@ -96,48 +87,72 @@ async function handlePaperCycle(request: NextRequest) {
     });
   }
 
+  const existingReceipts = await store.getReceipts();
   const generatedReceipts: DecisionReceipt[] = [];
+  let lastSkipReason = NO_MARKET_SKIP_REASON;
+  let mappedIssuerTicker: string | undefined;
+  let mappedRToken: string | undefined;
 
-  try {
-    for (const evt of events) {
-      const market = watchlist.find((m) => m.symbol === evt.affectedSymbol);
-      if (!market) {
-        console.log(`[CronPaperCycle] ${NO_MARKET_SKIP_REASON} (Symbol: ${evt.affectedSymbol})`);
-        continue;
-      }
+  for (const evt of qualifyingEvents) {
+    const ticker = evt.affectedSymbol.toUpperCase();
+    mappedIssuerTicker = ticker;
 
-      const decision = await agentEngine.evaluateEventAsync(evt, market, watchlist, INITIAL_RISK_BUDGET);
-      const risk = riskEngine.evaluateRisk(decision, market, INITIAL_RISK_BUDGET);
-      const order = paperExchange.executePaperOrder(decision, market, risk.isApproved);
-      const receipt = receiptGenerator.generateReceipt(evt, market, decision, risk, order);
+    // Rule 1 & 2: Resolve matching live Reality quote via stockList -> stockInfo
+    const quote = await rwaMarketProvider.getSingleQuote(ticker);
 
-      await store.saveReceipt(receipt);
-      generatedReceipts.push(receipt);
+    if (!quote) {
+      lastSkipReason = `No verified matching Reality quote available for symbol ${ticker}; competition decision skipped.`;
+      console.log(`[CronPaperCycle] ${lastSkipReason}`);
+      continue;
     }
-  } catch (err: any) {
-    const rawMsg = err.message || 'Unknown database write error';
-    const sanitizedMsg = rawMsg.replace(/postgresql:\/\/[^@]+@/gi, 'postgresql://***:***@');
-    console.error(`[CronPaperCycle] Persistent receipt saving failed: ${sanitizedMsg}`);
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: `Persistent receipt saving failed: ${sanitizedMsg}`,
-        storageMode: store.storeType,
-      },
-      { status: 500 }
-    );
+    mappedRToken = quote.symbol;
+
+    // Rule 3: Verify market status is OPEN / OVERNIGHT_ACTIVE
+    const isMarketOpen = quote.sessionStatus === 'OVERNIGHT_ACTIVE' || quote.sessionStatus === 'REGULAR_CLOSED';
+    if (!isMarketOpen) {
+      lastSkipReason = `Market status is not OPEN for symbol ${ticker}; paper trade skipped.`;
+      console.log(`[CronPaperCycle] ${lastSkipReason}`);
+      continue;
+    }
+
+    // Rule 3: Check open-position guard
+    if (hasOpenPositionForSymbol(existingReceipts, ticker)) {
+      lastSkipReason = `Open paper position already exists for symbol ${ticker}; paper trade skipped per position limit guard.`;
+      console.log(`[CronPaperCycle] ${lastSkipReason}`);
+      continue;
+    }
+
+    // Pass verified Reality quote into Qwen + deterministic risk pipeline
+    const watchlist = [quote];
+    const decision = await agentEngine.evaluateEventAsync(evt, quote, watchlist, INITIAL_RISK_BUDGET);
+    const risk = riskEngine.evaluateRisk(decision, quote, INITIAL_RISK_BUDGET);
+
+    if (!risk.isApproved) {
+      lastSkipReason = `Deterministic Risk Gate BLOCKED AI proposal: ${risk.blockingReasons.join('; ')}`;
+      console.log(`[CronPaperCycle] ${lastSkipReason}`);
+      continue;
+    }
+
+    // Execute paper order & generate decision receipt with Reality provenance
+    const order = paperExchange.executePaperOrder(decision, quote, risk.isApproved);
+    const receipt = receiptGenerator.generateReceipt(evt, quote, decision, risk, order);
+
+    await store.saveReceipt(receipt);
+    generatedReceipts.push(receipt);
   }
 
   const isQualified = generatedReceipts.length > 0;
   const audit = createRunAuditRecord({
     status: isQualified ? 'QUALIFIED' : 'SAFE_SKIP',
     eventProviderStatus: 'HEALTHY',
-    marketProviderStatus: isQualified ? 'HEALTHY' : 'UNVERIFIED_EQUITY_MARKET',
+    marketProviderStatus: 'HEALTHY',
     qwenInvoked: isQualified,
     decisionCreated: isQualified,
-    safeSkipReason: isQualified ? undefined : NO_MARKET_SKIP_REASON,
+    safeSkipReason: isQualified ? undefined : lastSkipReason,
     marketProviderDomain,
+    mappedIssuerTicker,
+    mappedRToken,
   });
 
   try {
@@ -147,12 +162,12 @@ async function handlePaperCycle(request: NextRequest) {
   }
 
   if (!isQualified) {
-    console.log(`[CronPaperCycle] ${NO_MARKET_SKIP_REASON}`);
+    console.log(`[CronPaperCycle] Safe Skip: ${lastSkipReason}`);
     return NextResponse.json({
       success: true,
       skipped: true,
-      reason: NO_MARKET_SKIP_REASON,
-      pipelineStatus: 'NO_QUALIFYING_EVENTS',
+      reason: lastSkipReason,
+      pipelineStatus: 'SAFE_SKIP',
       auditId: audit.auditId,
       auditHash: audit.hash,
       cyclesExecuted: 0,

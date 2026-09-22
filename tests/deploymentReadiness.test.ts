@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET as cronHandler } from '../src/app/api/cron/paper-cycle/route';
-import { getLedgerStoreInfo, getLedgerStore, DatabaseLedgerStore, LocalFileLedgerStore } from '../src/lib/store/persistentStore';
+import { getLedgerStoreInfo, getLedgerStore, DatabaseLedgerStore, LocalFileLedgerStore, hasOpenPositionForSymbol } from '../src/lib/store/persistentStore';
+import { DecisionReceipt } from '../src/types/domain';
 
 describe('Deployment Readiness & Cron Security', () => {
   const originalEnv = { ...process.env };
@@ -169,6 +170,54 @@ describe('Deployment Readiness & Cron Security', () => {
       expect(info.isPersistent).toBe(false);
       expect(info.isVercel).toBe(true);
       expect(info.description).toContain('DATABASE_URL required for Vercel persistence');
+    });
+  });
+
+  describe('Open Position Guard & Reality Quote Pipeline', () => {
+    it('should return false for empty or invalid receipts array', () => {
+      expect(hasOpenPositionForSymbol([], 'NVDA')).toBe(false);
+      expect(hasOpenPositionForSymbol(null as any, 'NVDA')).toBe(false);
+    });
+
+    it('should return true when an open SIMULATED_FILLED position exists for symbol or rToken symbol', () => {
+      const mockReceipts: Partial<DecisionReceipt>[] = [
+        {
+          receiptId: 'rcpt-1',
+          status: 'APPROVED_EXECUTED',
+          paperOrder: {
+            orderId: 'ord-1',
+            symbol: 'RNVDA',
+            side: 'BUY',
+            status: 'SIMULATED_FILLED',
+            qty: 10,
+            fillPrice: 120,
+            executedAt: new Date().toISOString(),
+          },
+        },
+      ];
+
+      expect(hasOpenPositionForSymbol(mockReceipts as DecisionReceipt[], 'NVDA')).toBe(true);
+      expect(hasOpenPositionForSymbol(mockReceipts as DecisionReceipt[], 'RNVDA')).toBe(true);
+    });
+
+    it('should return false when position is not APPROVED_EXECUTED or SIMULATED_FILLED', () => {
+      const mockReceipts: Partial<DecisionReceipt>[] = [
+        {
+          receiptId: 'rcpt-2',
+          status: 'REJECTED_RISK',
+          paperOrder: {
+            orderId: 'ord-2',
+            symbol: 'AAPL',
+            side: 'BUY',
+            status: 'CANCELLED',
+            qty: 5,
+            fillPrice: 150,
+            executedAt: new Date().toISOString(),
+          },
+        },
+      ];
+
+      expect(hasOpenPositionForSymbol(mockReceipts as DecisionReceipt[], 'AAPL')).toBe(false);
     });
   });
 });
