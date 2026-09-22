@@ -69,6 +69,9 @@ export interface BitgetWalletRwaSchemaDiagnostic {
   hasList?: boolean;
   listLength?: number;
   itemKeys?: string[];
+  contractsType?: string;
+  contractItemKeys?: string[];
+  sampleDataSources?: string[];
 }
 
 export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
@@ -215,8 +218,40 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
         : [];
 
       let itemKeys: string[] = [];
+      let contractsType = 'undefined';
+      let contractItemKeys: string[] = [];
+      const sampleDataSourcesSet = new Set<string>();
+
       if (Array.isArray(rawList) && rawList.length > 0 && rawList[0] && typeof rawList[0] === 'object') {
         itemKeys = Object.keys(rawList[0]);
+        const contractsVal = rawList[0].contracts;
+        if (Array.isArray(contractsVal)) {
+          contractsType = 'array';
+          if (contractsVal.length > 0 && contractsVal[0] && typeof contractsVal[0] === 'object') {
+            contractItemKeys = Object.keys(contractsVal[0]);
+          }
+        } else if (contractsVal && typeof contractsVal === 'object') {
+          contractsType = 'object';
+          contractItemKeys = Object.keys(contractsVal);
+        } else if (contractsVal !== undefined) {
+          contractsType = typeof contractsVal;
+        }
+      }
+
+      if (Array.isArray(rawList)) {
+        for (const item of rawList) {
+          if (item?.data_source) sampleDataSourcesSet.add(String(item.data_source).slice(0, 30));
+          if (item?.dataSource) sampleDataSourcesSet.add(String(item.dataSource).slice(0, 30));
+          if (Array.isArray(item?.contracts)) {
+            for (const c of item.contracts) {
+              if (c?.data_source) sampleDataSourcesSet.add(String(c.data_source).slice(0, 30));
+              if (c?.dataSource) sampleDataSourcesSet.add(String(c.dataSource).slice(0, 30));
+              if (c?.source) sampleDataSourcesSet.add(String(c.source).slice(0, 30));
+              if (c?.protocol) sampleDataSourcesSet.add(String(c.protocol).slice(0, 30));
+              if (c?.issuer) sampleDataSourcesSet.add(String(c.issuer).slice(0, 30));
+            }
+          }
+        }
       }
 
       this.schemaDiagnostic = {
@@ -229,6 +264,9 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
         hasList,
         listLength,
         itemKeys,
+        contractsType,
+        contractItemKeys,
+        sampleDataSources: Array.from(sampleDataSourcesSet).slice(0, 10),
       };
 
       const isSuccessCode =
@@ -265,24 +303,37 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
       const items: MarketContext[] = [];
 
       for (const rawItem of rawList) {
-        // Requirement: Accept a market ONLY if data_source === "reality"
-        const dataSource = (rawItem.data_source || rawItem.dataSource || rawItem.source || rawItem.dataMode || '').toLowerCase();
-        if (dataSource !== 'reality') {
-          continue;
+        const contractEntries: any[] = [];
+
+        if (Array.isArray(rawItem.contracts) && rawItem.contracts.length > 0) {
+          for (const c of rawItem.contracts) {
+            if (c && typeof c === 'object') {
+              contractEntries.push({ ...rawItem, ...c, parentTicker: rawItem.ticker, parentName: rawItem.name });
+            }
+          }
+        } else {
+          contractEntries.push(rawItem);
         }
 
-        const ticker = rawItem.ticker || rawItem.issuerTicker || rawItem.stockTicker || '';
-        const chain = rawItem.chain || rawItem.chainName || 'ethereum';
-        const contract = rawItem.contract || rawItem.contractAddress || rawItem.address || '';
-        const symbol = rawItem.symbol || (ticker ? `r${ticker}` : '');
-        const marketStatus = rawItem.market_status || rawItem.marketStatus || 'OPEN';
-        const parsedPrice = parseFloat(String(rawItem.latest_price || rawItem.latestPrice || rawItem.price || '0'));
-        const latestPrice = !isNaN(parsedPrice) && parsedPrice > 0 ? parsedPrice : 100.0;
-        const traceId = (rawItem.trace_id || rawItem.traceId || body?.traceId || body?.trace_id || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        for (const entry of contractEntries) {
+          // Requirement: Accept a market ONLY if data_source === "reality"
+          const dataSource = (entry.data_source || entry.dataSource || entry.source || entry.protocol || entry.dataMode || '').toLowerCase();
+          if (dataSource !== 'reality') {
+            continue;
+          }
 
-        if (!symbol) {
-          continue;
-        }
+          const ticker = entry.ticker || entry.parentTicker || entry.issuerTicker || entry.stockTicker || '';
+          const chain = entry.chain || entry.chainName || entry.network || 'ethereum';
+          const contract = entry.contract || entry.contractAddress || entry.address || '';
+          const symbol = entry.symbol || (ticker ? `r${ticker}` : '');
+          const marketStatus = entry.market_status || entry.marketStatus || entry.status || 'OPEN';
+          const parsedPrice = parseFloat(String(entry.latest_price || entry.latestPrice || entry.price || '0'));
+          const latestPrice = !isNaN(parsedPrice) && parsedPrice > 0 ? parsedPrice : 100.0;
+          const traceId = (entry.trace_id || entry.traceId || body?.traceId || body?.trace_id || '').replace(/[^a-zA-Z0-9_-]/g, '');
+
+          if (!symbol) {
+            continue;
+          }
 
         const prevClose = latestPrice;
         const change24hPct = 0;
@@ -333,6 +384,7 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
         };
 
         items.push(ctx);
+        }
       }
 
       return items;
