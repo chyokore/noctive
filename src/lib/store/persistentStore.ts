@@ -377,12 +377,25 @@ export class DatabaseLedgerStore implements ILedgerStore {
     }
   }
 
+  private async ensureRealityMarketSnapshotsTable(client: Client): Promise<void> {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS reality_market_snapshots (
+        snapshot_id VARCHAR(64) PRIMARY KEY,
+        ticker VARCHAR(32) NOT NULL,
+        timestamp TIMESTAMPTZ NOT NULL,
+        payload JSONB NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_reality_snapshots_ticker ON reality_market_snapshots (ticker, timestamp DESC);
+    `);
+  }
+
   public async getLatestRealitySnapshot(ticker: string): Promise<RealityMarketSnapshot | null> {
     if (typeof window === 'undefined') {
       let client: Client | null = null;
       try {
         client = new Client({ connectionString: this.connectionString });
         await client.connect();
+        await this.ensureRealityMarketSnapshotsTable(client);
         const norm = ticker.toUpperCase().replace(/^R/, '');
         const res = await client.query(
           'SELECT payload FROM reality_market_snapshots WHERE ticker = $1 ORDER BY timestamp DESC LIMIT 1',
@@ -413,15 +426,7 @@ export class DatabaseLedgerStore implements ILedgerStore {
       try {
         client = new Client({ connectionString: this.connectionString });
         await client.connect();
-        await client.query(`
-          CREATE TABLE IF NOT EXISTS reality_market_snapshots (
-            snapshot_id VARCHAR(64) PRIMARY KEY,
-            ticker VARCHAR(32) NOT NULL,
-            timestamp TIMESTAMPTZ NOT NULL,
-            payload JSONB NOT NULL
-          );
-          CREATE INDEX IF NOT EXISTS idx_reality_snapshots_ticker ON reality_market_snapshots (ticker, timestamp DESC);
-        `);
+        await this.ensureRealityMarketSnapshotsTable(client);
         const norm = snapshot.ticker.toUpperCase().replace(/^R/, '');
         await client.query(
           `INSERT INTO reality_market_snapshots (snapshot_id, ticker, timestamp, payload)

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { evaluateRealityPulse, createPulseEventItem } from '../src/lib/engine/realityPulseDetector';
-import { LocalFileLedgerStore, hasOpenPositionForSymbol } from '../src/lib/store/persistentStore';
+import { LocalFileLedgerStore, DatabaseLedgerStore, hasOpenPositionForSymbol } from '../src/lib/store/persistentStore';
 import { RealityMarketSnapshot, DecisionReceipt } from '../src/types/domain';
 import { MarketContextWithRwaProvenance } from '../src/lib/adapters/bitgetWalletRwaMarketProvider';
 
@@ -262,6 +262,15 @@ describe('Reality Market Pulse Detector & Snapshot Store', () => {
       ];
 
       expect(hasOpenPositionForSymbol(openReceipts as DecisionReceipt[], 'TSLA')).toBe(true);
+    });
+  });
+
+  describe('Database Self-Healing & Auto-Migration (DatabaseLedgerStore)', () => {
+    it('should safely execute getLatestRealitySnapshot without throwing unhandled missing table errors', async () => {
+      const store = new DatabaseLedgerStore('postgresql://invalid_user:invalid_pass@127.0.0.1:54321/test_db');
+      // getLatestRealitySnapshot must self-heal table schema before querying
+      const snapshot = await store.getLatestRealitySnapshot('NVDA');
+      expect(snapshot).toBeNull();
     });
   });
 });
