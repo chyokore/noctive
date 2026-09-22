@@ -68,6 +68,7 @@ export interface BitgetWalletRwaSchemaDiagnostic {
   dataKeys?: string[];
   hasList?: boolean;
   listLength?: number;
+  itemKeys?: string[];
 }
 
 export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
@@ -205,6 +206,19 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
         }
       }
 
+      const rawList: any[] = Array.isArray(body?.data?.list)
+        ? body.data.list
+        : Array.isArray(body?.data?.items)
+        ? body.data.items
+        : Array.isArray(body?.data)
+        ? body.data
+        : [];
+
+      let itemKeys: string[] = [];
+      if (Array.isArray(rawList) && rawList.length > 0 && rawList[0] && typeof rawList[0] === 'object') {
+        itemKeys = Object.keys(rawList[0]);
+      }
+
       this.schemaDiagnostic = {
         contentType,
         topLevelKeys: body && typeof body === 'object' ? Object.keys(body) : [],
@@ -214,28 +228,19 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
         dataKeys,
         hasList,
         listLength,
+        itemKeys,
       };
 
       const isSuccessCode =
-        body &&
-        (body.status === 0 ||
-          body.status === '0' ||
-          body.code === 0 ||
-          body.code === '0' ||
-          body.code === '00000' ||
-          body.code === 200 ||
-          body.code === '200' ||
-          body.status === 200 ||
-          Array.isArray(body?.data?.list) ||
-          Array.isArray(body?.data));
-
-      const rawList: any[] = Array.isArray(body?.data?.list)
-        ? body.data.list
-        : Array.isArray(body?.data?.items)
-        ? body.data.items
-        : Array.isArray(body?.data)
-        ? body.data
-        : [];
+        body?.code === 0 ||
+        body?.code === '0' ||
+        body?.code === 200 ||
+        body?.code === '200' ||
+        body?.status === 0 ||
+        body?.status === '0' ||
+        body?.status === 200 ||
+        body?.status === '200' ||
+        (body?.code === undefined && body?.status === undefined);
 
       if (!isSuccessCode || !Array.isArray(rawList)) {
         const errMsg = (body?.msg || body?.message || body?.error || 'Invalid API response payload')
