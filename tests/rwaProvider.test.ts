@@ -68,7 +68,14 @@ describe('Bitget Wallet RWA Signed Market Provider (https://bopenapi.bgwapi.io /
 
     global.fetch = vi.fn().mockImplementation(async (url: string, opts: any) => {
       capturedUrl = url;
-      capturedHeaders = opts.headers;
+      capturedHeaders =
+        opts.headers && typeof opts.headers.get === 'function'
+          ? {
+              'x-api-key': opts.headers.get('x-api-key'),
+              'x-api-timestamp': opts.headers.get('x-api-timestamp'),
+              'x-api-signature': opts.headers.get('x-api-signature'),
+            }
+          : opts.headers;
       capturedBody = opts.body;
       return {
         ok: true,

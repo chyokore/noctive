@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { createSigningFetch, buildSignPayload, signPayload } from '@bitget-wallet/api/auth';
 import { MarketContext, ExternalInputProvenance } from '@/types/domain';
 import { IMarketDataProvider } from './marketDataProvider';
 
@@ -30,12 +31,8 @@ export interface MarketContextWithRwaProvenance extends MarketContext {
 }
 
 /**
- * Construct x-api-signature per official Bitget Wallet Authentication docs:
- * - Preserve raw JSON body string actually sent
- * - Construct signed content using apiPath, body, x-api-key, x-api-timestamp
- * - Alphabetically sort parameter keys: apiPath, body, x-api-key, x-api-timestamp
- * - HMAC-SHA256 using BITGET_WALLET_API_SECRET
- * - Base64 encode the result
+ * Construct x-api-signature using official Bitget Wallet TypeScript SDK helper:
+ * - Uses buildSignPayload and signPayload from @bitget-wallet/api/auth
  * - Never log key, secret, signature, or authorization headers
  */
 export function buildBitgetWalletSignature(
@@ -45,8 +42,14 @@ export function buildBitgetWalletSignature(
   timestampMs: string,
   apiSecret: string
 ): string {
-  const payloadToSign = `apiPath=${apiPath}&body=${rawBodyStr}&x-api-key=${apiKey}&x-api-timestamp=${timestampMs}`;
-  return crypto.createHmac('sha256', apiSecret).update(payloadToSign).digest('base64');
+  const payload = buildSignPayload({
+    apiPath,
+    body: rawBodyStr,
+    queryParams: {},
+    apiKey,
+    apiTimestamp: timestampMs,
+  });
+  return signPayload(payload, apiSecret);
 }
 
 export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
@@ -79,26 +82,18 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
-      const timestampMs = Date.now().toString();
+      const signingFetch = createSigningFetch({
+        apiKey: this.apiKey,
+        apiSecret: this.apiSecret,
+      });
+
       const rawBodyStr = '{}';
 
-      // Requirement 3: Build HMAC-SHA256 Base64 signature
-      const signature = buildBitgetWalletSignature(
-        apiPath,
-        rawBodyStr,
-        this.apiKey,
-        timestampMs,
-        this.apiSecret
-      );
-
-      const res = await fetch(endpointUrl, {
+      const res = await signingFetch(endpointUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
-          'x-api-key': this.apiKey,
-          'x-api-timestamp': timestampMs,
-          'x-api-signature': signature,
           'User-Agent': 'NoctiveRwaAgent/1.0',
         },
         body: rawBodyStr,
@@ -133,7 +128,12 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
         }
 
         if (!traceId) {
-          const headerTrace = res.headers.get('x-trace-id') || res.headers.get('trace-id') || res.headers.get('traceid');
+          const headerTrace =
+            res.headers.get('x-trace-id') ||
+            res.headers.get('trace-id') ||
+            res.headers.get('traceid') ||
+            res.headers.get('x-bgw-trace-id') ||
+            res.headers.get('bgw-trace-id');
           if (headerTrace) {
             traceId = headerTrace.replace(/[^a-zA-Z0-9_-]/g, '');
           }
