@@ -15,9 +15,38 @@ async function handleRwaCheck(request: NextRequest) {
     );
   }
 
-  const rwaProvider = new BitgetWalletRwaMarketProvider();
-  const watchlist = await rwaProvider.getWatchlist();
+  const { searchParams } = new URL(request.url);
+  const targetTicker = searchParams.get('ticker');
 
+  const rwaProvider = new BitgetWalletRwaMarketProvider();
+
+  if (targetTicker) {
+    const singleQuote = await rwaProvider.getSingleQuote(targetTicker);
+    const schemaDiagnostic = rwaProvider.schemaDiagnostic || undefined;
+    if (singleQuote) {
+      const ext = (singleQuote as any).externalProvenance || {};
+      return NextResponse.json({
+        success: true,
+        providerStatus: 'HEALTHY',
+        targetTicker: targetTicker.toUpperCase(),
+        quote: {
+          symbol: singleQuote.symbol,
+          underlyingTicker: ext.underlyingStockSymbol || targetTicker.toUpperCase(),
+          chain: ext.chain || singleQuote.chain,
+          contract: ext.contractAddress || singleQuote.contractAddress,
+          latestPrice: singleQuote.currentPrice,
+          marketStatus: singleQuote.sessionStatus === 'OVERNIGHT_ACTIVE' ? 'OPEN' : singleQuote.sessionStatus,
+          dataSource: ext.dataSource || 'reality',
+          traceId: ext.traceId || undefined,
+          retrievedAtTimestamp: ext.retrievedAtTimestamp || new Date().toISOString(),
+        },
+        schemaDiagnostic,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
+  const watchlist = await rwaProvider.getWatchlist();
   const schemaDiagnostic = rwaProvider.schemaDiagnostic || undefined;
 
   if (watchlist.length > 0) {
@@ -30,9 +59,30 @@ async function handleRwaCheck(request: NextRequest) {
       };
     });
 
+    const targetQuoteItem = watchlist.find((item) => {
+      const ext = (item as any).externalProvenance || {};
+      return (ext.underlyingStockSymbol || '').toUpperCase() === 'NVDA' || item.symbol.toUpperCase() === 'RNVDA';
+    }) || watchlist[0];
+
+    const extQuote = targetQuoteItem ? (targetQuoteItem as any).externalProvenance || {} : {};
+
     return NextResponse.json({
       success: true,
       providerStatus: 'HEALTHY',
+      targetTicker: 'NVDA',
+      quote: targetQuoteItem
+        ? {
+            symbol: targetQuoteItem.symbol,
+            underlyingTicker: extQuote.underlyingStockSymbol || 'NVDA',
+            chain: extQuote.chain || (targetQuoteItem as any).chain || 'morph',
+            contract: extQuote.contractAddress || (targetQuoteItem as any).contractAddress || '',
+            latestPrice: targetQuoteItem.currentPrice,
+            marketStatus: targetQuoteItem.sessionStatus === 'OVERNIGHT_ACTIVE' ? 'OPEN' : targetQuoteItem.sessionStatus,
+            dataSource: extQuote.dataSource || 'reality',
+            traceId: extQuote.traceId || undefined,
+            retrievedAtTimestamp: extQuote.retrievedAtTimestamp || new Date().toISOString(),
+          }
+        : null,
       realityContractsCount: watchlist.length,
       sampleContracts,
       schemaDiagnostic,

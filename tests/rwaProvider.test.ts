@@ -89,7 +89,7 @@ describe('Bitget Wallet RWA Signed Market Provider (https://bopenapi.bgwapi.io /
       apiSecret: 'test-api-secret',
     });
 
-    const watchlist = await provider.getWatchlist();
+    const stockList = await provider.fetchStockList();
 
     expect(capturedUrl).toBe(`${BITGET_WALLET_BOPENAPI_URL}/bgw-pro/market/v3/rwa/stockList`);
     expect(capturedBody).toBe('{}');
@@ -98,8 +98,8 @@ describe('Bitget Wallet RWA Signed Market Provider (https://bopenapi.bgwapi.io /
     expect(capturedHeaders['x-api-signature']).toBeDefined();
     expect(capturedHeaders['x-api-signature'].length).toBeGreaterThan(10);
 
-    expect(watchlist.length).toBe(1);
-    expect(watchlist[0].symbol).toBe('rNVDA');
+    expect(stockList.length).toBe(1);
+    expect(stockList[0].symbol).toBe('rNVDA');
   });
 
   it('should filter out non-Reality tokens and retain only markets where data_source === "reality"', async () => {
