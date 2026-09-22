@@ -43,6 +43,7 @@ describe('Bitget Wallet RWA Signed Market Provider (https://bopenapi.bgwapi.io /
 
   it('should construct signed HTTP headers and send raw body string "{}" to bopenapi stockList endpoint', async () => {
     const mockApiResponse = {
+      status: 0,
       code: 0,
       msg: 'success',
       data: {
@@ -103,6 +104,7 @@ describe('Bitget Wallet RWA Signed Market Provider (https://bopenapi.bgwapi.io /
 
   it('should filter out non-Reality tokens and retain only markets where data_source === "reality"', async () => {
     const mockApiResponse = {
+      status: 0,
       code: 0,
       msg: 'success',
       data: {
@@ -160,6 +162,7 @@ describe('Bitget Wallet RWA Signed Market Provider (https://bopenapi.bgwapi.io /
 
   it('should never leak API keys, secrets, or signatures into returned provenance objects or logs', async () => {
     const mockApiResponse = {
+      status: 0,
       code: 0,
       msg: 'success',
       data: {

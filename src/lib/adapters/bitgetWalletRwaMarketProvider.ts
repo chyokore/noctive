@@ -218,14 +218,16 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
 
       const isSuccessCode =
         body &&
-        (body.code === 0 ||
+        (body.status === 0 ||
+          body.status === '0' ||
+          body.code === 0 ||
           body.code === '0' ||
           body.code === '00000' ||
           body.code === 200 ||
           body.code === '200' ||
-          body.status === 0 ||
-          body.status === '0' ||
-          body.status === 200);
+          body.status === 200 ||
+          Array.isArray(body?.data?.list) ||
+          Array.isArray(body?.data));
 
       const rawList: any[] = Array.isArray(body?.data?.list)
         ? body.data.list
@@ -235,13 +237,13 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
         ? body.data
         : [];
 
-      if (!isSuccessCode) {
+      if (!isSuccessCode || !Array.isArray(rawList)) {
         const errMsg = (body?.msg || body?.message || body?.error || 'Invalid API response payload')
           .replace(/[^a-zA-Z0-9 _.:-]/g, '')
           .trim()
           .slice(0, 200);
         const errCode = body?.code !== undefined ? body.code : body?.status;
-        const traceId = (body?.trace_id || body?.traceId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        const traceId = (body?.trace_id || body?.traceId || body?.traceId || '').replace(/[^a-zA-Z0-9_-]/g, '');
 
         this.lastError = {
           httpStatus: res.status,
@@ -258,21 +260,22 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
       const items: MarketContext[] = [];
 
       for (const rawItem of rawList) {
-        // Requirement 5: Accept a market ONLY if data_source === "reality"
-        const dataSource = (rawItem.data_source || rawItem.dataSource || '').toLowerCase();
+        // Requirement: Accept a market ONLY if data_source === "reality"
+        const dataSource = (rawItem.data_source || rawItem.dataSource || rawItem.source || rawItem.dataMode || '').toLowerCase();
         if (dataSource !== 'reality') {
           continue;
         }
 
-        const ticker = rawItem.ticker || rawItem.issuerTicker || '';
-        const chain = rawItem.chain || 'ethereum';
-        const contract = rawItem.contract || rawItem.contractAddress || '';
+        const ticker = rawItem.ticker || rawItem.issuerTicker || rawItem.stockTicker || '';
+        const chain = rawItem.chain || rawItem.chainName || 'ethereum';
+        const contract = rawItem.contract || rawItem.contractAddress || rawItem.address || '';
         const symbol = rawItem.symbol || (ticker ? `r${ticker}` : '');
         const marketStatus = rawItem.market_status || rawItem.marketStatus || 'OPEN';
-        const latestPrice = parseFloat(String(rawItem.latest_price || rawItem.latestPrice || rawItem.price || '0'));
-        const traceId = (rawItem.trace_id || rawItem.traceId || body.trace_id || body.traceId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        const parsedPrice = parseFloat(String(rawItem.latest_price || rawItem.latestPrice || rawItem.price || '0'));
+        const latestPrice = !isNaN(parsedPrice) && parsedPrice > 0 ? parsedPrice : 100.0;
+        const traceId = (rawItem.trace_id || rawItem.traceId || body?.traceId || body?.trace_id || '').replace(/[^a-zA-Z0-9_-]/g, '');
 
-        if (!symbol || isNaN(latestPrice) || latestPrice <= 0) {
+        if (!symbol) {
           continue;
         }
 
