@@ -65,7 +65,8 @@ async function handlePaperCycle(request: NextRequest) {
   let decisionCreated = false;
   let mappedIssuerTicker: string | undefined;
   let mappedRToken: string | undefined;
-  let realityDiagText = '';
+  let watchlistQuotes: MarketContextWithRwaProvenance[] = [];
+  const prevSnapshotsMap = new Map<string, RealityMarketSnapshot | null>();
   const generatedReceipts: DecisionReceipt[] = [];
 
   try {
@@ -73,7 +74,6 @@ async function handlePaperCycle(request: NextRequest) {
     const rwaMarketProvider = new BitgetWalletRwaMarketProvider();
 
     // 1. Fetch live Reality quotes for approved equity watchlist (MUST RUN BEFORE SEC CHECK)
-    let watchlistQuotes: MarketContextWithRwaProvenance[] = [];
     try {
       watchlistQuotes = (await rwaMarketProvider.getWatchlist()) as MarketContextWithRwaProvenance[];
       marketProviderStatus = watchlistQuotes.length > 0 ? 'HEALTHY' : 'UNAVAILABLE';
@@ -82,7 +82,6 @@ async function handlePaperCycle(request: NextRequest) {
       marketProviderStatus = 'UNAVAILABLE';
     }
 
-    const prevSnapshotsMap = new Map<string, RealityMarketSnapshot | null>();
     const pulseCandidates: { pulse: RealityMarketPulse; pulseEvent: EventItem; quote: MarketContextWithRwaProvenance }[] = [];
 
     for (const rawQuote of watchlistQuotes) {
@@ -128,13 +127,6 @@ async function handlePaperCycle(request: NextRequest) {
         pulseCandidates.push({ pulse: detected30mPulse, pulseEvent, quote });
       }
     }
-
-    const realityDiagSummary = collectRealityDiagnostics(
-      watchlistQuotes,
-      prevSnapshotsMap,
-      marketProviderStatus === 'UNAVAILABLE' ? 'Bitget Wallet RWA API unavailable or offline' : undefined
-    );
-    realityDiagText = formatRealityDiagnosticsText(realityDiagSummary);
 
     // 2. Fetch live SEC events
     let events: EventItem[] = [];
@@ -251,11 +243,18 @@ async function handlePaperCycle(request: NextRequest) {
     console.error('[CronPaperCycle] Uncaught error during paper cycle execution:', uncaughtErr);
     safeSkipReason = `Pipeline execution error: ${uncaughtErr?.message || String(uncaughtErr)}`;
   } finally {
-    if (runStatus === 'SAFE_SKIP' && realityDiagText) {
+    if (runStatus === 'SAFE_SKIP') {
+      const diagSummary = collectRealityDiagnostics(
+        watchlistQuotes,
+        prevSnapshotsMap,
+        marketProviderStatus === 'UNAVAILABLE' ? 'Bitget Wallet RWA API unavailable or offline' : undefined
+      );
+      const diagText = formatRealityDiagnosticsText(diagSummary);
+
       if (safeSkipReason === 'No qualifying live SEC event or Reality Market Pulse matching approved equity watchlist.') {
-        safeSkipReason = `No qualifying live SEC event or Reality Market Pulse. ${realityDiagText}`;
+        safeSkipReason = `No qualifying live SEC event or Reality Market Pulse. ${diagText}`;
       } else if (!safeSkipReason.includes('Reality Diagnostics:')) {
-        safeSkipReason = `${safeSkipReason} ${realityDiagText}`;
+        safeSkipReason = `${safeSkipReason} ${diagText}`;
       }
     }
 

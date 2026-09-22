@@ -23,6 +23,11 @@ export default function CompetitionLogPage() {
     isPersistent: boolean;
     description: string;
   } | null>(null);
+  const [expandedAuditIds, setExpandedAuditIds] = useState<Record<string, boolean>>({});
+
+  const toggleAuditDetails = (id: string) => {
+    setExpandedAuditIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -230,9 +235,30 @@ export default function CompetitionLogPage() {
                       <td className="py-3 text-slate-300">{audit.marketProviderDomain}</td>
                       <td className="py-3 text-slate-300">{audit.qwenInvoked ? 'YES' : 'NO'}</td>
                       <td className="py-3 text-slate-300">{audit.decisionCreated ? 'YES' : 'NO'}</td>
-                      <td className="py-3 text-slate-300 max-w-md font-mono text-[11px]" title={audit.safeSkipReason || 'Verified Live Market Decision Created'}>
-                        <div className="line-clamp-2 font-mono text-[11px] text-slate-300">
-                          {audit.safeSkipReason || 'Verified Live Market Decision Created'}
+                      <td className="py-3 text-slate-300 max-w-lg font-mono text-[11px]">
+                        <div className="space-y-1.5">
+                          <div className="text-slate-200 leading-normal">
+                            {audit.safeSkipReason || 'Verified Live Market Decision Created'}
+                          </div>
+                          {audit.safeSkipReason && (
+                            <div>
+                              <button
+                                onClick={() => toggleAuditDetails(audit.auditId)}
+                                className="text-electric-400 hover:text-electric-300 underline font-mono text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                              >
+                                {expandedAuditIds[audit.auditId] ? 'Hide details ▲' : 'View details ▼'}
+                              </button>
+                            </div>
+                          )}
+                          {expandedAuditIds[audit.auditId] && audit.safeSkipReason && (
+                            <div className="mt-2 p-3 rounded-lg bg-navy-950 border border-navy-800 text-slate-200 font-mono text-[11px] leading-relaxed shadow-lg whitespace-pre-wrap">
+                              <div className="text-electric-400 font-bold mb-1 border-b border-navy-800 pb-1 flex items-center justify-between">
+                                <span>REALITY AUDIT DIAGNOSTICS DETAIL</span>
+                                <span className="text-[10px] text-slate-400 font-normal">{audit.auditId}</span>
+                              </div>
+                              {audit.safeSkipReason}
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="py-3 text-right font-bold text-electric-400">{audit.hash}</td>

@@ -498,6 +498,14 @@ describe('Reality Market Pulse Detector & Snapshot Store', () => {
       expect(data.auditId).toBeDefined();
       expect(data.skipped).toBe(true);
       expect(data.pipelineStatus).toBe('SAFE_SKIP');
+      expect(data.reason).toContain('Reality Diagnostics:');
+
+      const audits = await store.getRunAudits();
+      const latestAudit = audits.find((a) => a.auditId === data.auditId);
+      expect(latestAudit).toBeDefined();
+      expect(latestAudit?.status).toBe('SAFE_SKIP');
+      expect(latestAudit?.safeSkipReason).toContain('Reality Diagnostics:');
+      expect(latestAudit?.safeSkipReason).toContain('quotes sampled');
     }, 15000);
   });
 
