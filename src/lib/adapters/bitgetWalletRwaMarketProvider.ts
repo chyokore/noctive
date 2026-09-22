@@ -80,6 +80,9 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
 
     // Requirement 4: Require both BITGET_WALLET_API_KEY and BITGET_WALLET_API_SECRET
     if (!this.apiKey || !this.apiSecret || this.apiKey.trim() === '' || this.apiSecret.trim() === '') {
+      this.lastError = {
+        message: 'BITGET_WALLET_API_KEY or BITGET_WALLET_API_SECRET environment variable is missing',
+      };
       console.warn(
         `[BitgetWalletRwaMarketProvider] Authentication failed: BITGET_WALLET_API_KEY or BITGET_WALLET_API_SECRET environment variable is missing. Fail closed.`
       );
@@ -243,6 +246,11 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
       return items;
     } catch (err: any) {
       clearTimeout(timer);
+      if (!this.lastError) {
+        this.lastError = {
+          message: err.message,
+        };
+      }
       console.warn(`[BitgetWalletRwaMarketProvider] Fail closed: ${err.message}`);
       return [];
     }
