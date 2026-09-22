@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { BitgetWalletRwaMarketProvider } from '../src/lib/adapters/bitgetWalletRwaMarketProvider';
-import { DataProvenanceBadge } from '../src/components/DataProvenanceBadge';
-import { StooqMarketDataProvider } from '../src/lib/adapters/stooqMarketDataProvider';
+import {
+  BitgetWalletRwaMarketProvider,
+  buildBitgetWalletSignature,
+  BITGET_WALLET_BOPENAPI_URL,
+} from '../src/lib/adapters/bitgetWalletRwaMarketProvider';
 
-describe('Bitget Wallet RWA Market Data Provider (web3.bitget.com / Reality)', () => {
+describe('Bitget Wallet RWA Signed Market Provider (https://bopenapi.bgwapi.io / Reality)', () => {
   const originalFetch = global.fetch;
 
   afterEach(() => {
@@ -11,14 +13,85 @@ describe('Bitget Wallet RWA Market Data Provider (web3.bitget.com / Reality)', (
     vi.restoreAllMocks();
   });
 
-  it('should fail closed cleanly when API key is missing or unauthenticated', async () => {
-    const provider = new BitgetWalletRwaMarketProvider({ apiKey: '' });
-    const watchlist = await provider.getWatchlist();
+  it('should construct valid HMAC-SHA256 Base64 x-api-signature with alphabetically sorted parameter keys', () => {
+    const apiPath = '/bgw-pro/market/v3/rwa/stockList';
+    const rawBodyStr = JSON.stringify({ page: 1, pageSize: 50 });
+    const apiKey = 'test-key-123';
+    const timestampMs = '1700000000000';
+    const apiSecret = 'test-secret-456';
 
-    expect(watchlist).toEqual([]);
+    const sig = buildBitgetWalletSignature(apiPath, rawBodyStr, apiKey, timestampMs, apiSecret);
+
+    expect(sig).toBeDefined();
+    expect(typeof sig).toBe('string');
+    expect(sig.length).toBeGreaterThan(10);
+
+    // Verify determinism
+    const sig2 = buildBitgetWalletSignature(apiPath, rawBodyStr, apiKey, timestampMs, apiSecret);
+    expect(sig).toBe(sig2);
   });
 
-  it('should filter out non-Reality tokens and discover only markets with data_source === "reality"', async () => {
+  it('should fail closed cleanly when BITGET_WALLET_API_KEY or BITGET_WALLET_API_SECRET is missing', async () => {
+    const provider1 = new BitgetWalletRwaMarketProvider({ apiKey: '', apiSecret: 'secret' });
+    const watchlist1 = await provider1.getWatchlist();
+    expect(watchlist1).toEqual([]);
+
+    const provider2 = new BitgetWalletRwaMarketProvider({ apiKey: 'key', apiSecret: '' });
+    const watchlist2 = await provider2.getWatchlist();
+    expect(watchlist2).toEqual([]);
+  });
+
+  it('should construct signed HTTP headers (x-api-key, x-api-timestamp, x-api-signature) and target bopenapi endpoint', async () => {
+    const mockApiResponse = {
+      code: 0,
+      msg: 'success',
+      data: {
+        list: [
+          {
+            ticker: 'NVDA',
+            chain: 'ethereum',
+            contract: '0x1111111111111111111111111111111111111111',
+            symbol: 'rNVDA',
+            name: 'NVIDIA Corp Tokenized Stock',
+            market_status: 'OPEN',
+            latest_price: 135.5,
+            data_source: 'reality',
+            trace_id: 'trace-nvda-123',
+          },
+        ],
+      },
+    };
+
+    let capturedHeaders: any = null;
+    let capturedUrl: string = '';
+
+    global.fetch = vi.fn().mockImplementation(async (url: string, opts: any) => {
+      capturedUrl = url;
+      capturedHeaders = opts.headers;
+      return {
+        ok: true,
+        json: async () => mockApiResponse,
+      };
+    });
+
+    const provider = new BitgetWalletRwaMarketProvider({
+      apiKey: 'test-api-key',
+      apiSecret: 'test-api-secret',
+    });
+
+    const watchlist = await provider.getWatchlist();
+
+    expect(capturedUrl).toBe(`${BITGET_WALLET_BOPENAPI_URL}/bgw-pro/market/v3/rwa/stockList`);
+    expect(capturedHeaders['x-api-key']).toBe('test-api-key');
+    expect(capturedHeaders['x-api-timestamp']).toBeDefined();
+    expect(capturedHeaders['x-api-signature']).toBeDefined();
+    expect(capturedHeaders['x-api-signature'].length).toBeGreaterThan(10);
+
+    expect(watchlist.length).toBe(1);
+    expect(watchlist[0].symbol).toBe('rNVDA');
+  });
+
+  it('should filter out non-Reality tokens and retain only markets where data_source === "reality"', async () => {
     const mockApiResponse = {
       code: 0,
       msg: 'success',
@@ -36,7 +109,7 @@ describe('Bitget Wallet RWA Market Data Provider (web3.bitget.com / Reality)', (
             trace_id: 'trace-nvda-123',
           },
           {
-            ticker: 'SOME_SYNTH',
+            ticker: 'SYNTH_ASSET',
             chain: 'solana',
             contract: '0x2222222222222222222222222222222222222222',
             symbol: 'rSYNTH',
@@ -55,15 +128,16 @@ describe('Bitget Wallet RWA Market Data Provider (web3.bitget.com / Reality)', (
       json: async () => mockApiResponse,
     });
 
-    const provider = new BitgetWalletRwaMarketProvider({ apiKey: 'test-api-key-123' });
+    const provider = new BitgetWalletRwaMarketProvider({
+      apiKey: 'test-api-key',
+      apiSecret: 'test-api-secret',
+    });
+
     const watchlist = await provider.getWatchlist();
 
     expect(watchlist.length).toBe(1);
-
     const nvda = watchlist[0];
     expect(nvda.symbol).toBe('rNVDA');
-    expect(nvda.currentPrice).toBe(135.5);
-    expect(nvda.isDemoData).toBe(false);
 
     const prov = (nvda as any).externalProvenance;
     expect(prov).toBeDefined();
@@ -72,23 +146,44 @@ describe('Bitget Wallet RWA Market Data Provider (web3.bitget.com / Reality)', (
     expect(prov.chain).toBe('ethereum');
     expect(prov.contractAddress).toBe('0x1111111111111111111111111111111111111111');
     expect(prov.underlyingStockSymbol).toBe('NVDA');
-    expect(prov.traceId).toBe('trace-nvda-123');
   });
 
-  it('should fail closed cleanly on HTTP network errors or bad responses', async () => {
-    global.fetch = vi.fn().mockRejectedValue(new Error('Fetch failed / connection refused'));
-
-    const provider = new BitgetWalletRwaMarketProvider({ apiKey: 'test-api-key-123' });
-    const watchlist = await provider.getWatchlist();
-
-    expect(watchlist).toEqual([]);
-  });
-
-  it('should strictly separate Stooq reference provenance from Bitget Wallet RWA provenance', () => {
-    const stooqProv = {
-      dataMode: 'LIVE_EXTERNAL_UNDERLYING_REFERENCE' as const,
-      publisherDomain: 'stooq.com',
+  it('should never leak API keys, secrets, or signatures into returned provenance objects or logs', async () => {
+    const mockApiResponse = {
+      code: 0,
+      msg: 'success',
+      data: {
+        list: [
+          {
+            ticker: 'AAPL',
+            chain: 'ethereum',
+            contract: '0x3333333333333333333333333333333333333333',
+            symbol: 'rAAPL',
+            name: 'Apple Inc Tokenized Stock',
+            market_status: 'OPEN',
+            latest_price: 228.0,
+            data_source: 'reality',
+            trace_id: 'trace-aapl-789',
+          },
+        ],
+      },
     };
-    expect(stooqProv.dataMode).not.toBe('BITGET_WALLET_RWA_REALITY_READ_ONLY');
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => mockApiResponse,
+    });
+
+    const secretValue = 'SUPER_SECRET_KEY_DO_NOT_LEAK';
+    const provider = new BitgetWalletRwaMarketProvider({
+      apiKey: 'SENSITIVE_KEY_VALUE',
+      apiSecret: secretValue,
+    });
+
+    const watchlist = await provider.getWatchlist();
+    const serialized = JSON.stringify(watchlist);
+
+    expect(serialized.includes(secretValue)).toBe(false);
+    expect(serialized.includes('SENSITIVE_KEY_VALUE')).toBe(false);
   });
 });

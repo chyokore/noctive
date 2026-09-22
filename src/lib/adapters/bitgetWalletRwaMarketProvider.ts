@@ -5,10 +5,11 @@ import { IMarketDataProvider } from './marketDataProvider';
 export interface BitgetWalletRwaConfig {
   baseUrl?: string;
   apiKey?: string;
+  apiSecret?: string;
   timeoutMs?: number;
 }
 
-export const BITGET_WALLET_DEFAULT_URL = 'https://web3.bitget.com';
+export const BITGET_WALLET_BOPENAPI_URL = 'https://bopenapi.bgwapi.io';
 
 export interface BitgetRwaStockItem {
   ticker: string;
@@ -28,25 +29,48 @@ export interface MarketContextWithRwaProvenance extends MarketContext {
   contractAddress: string;
 }
 
+/**
+ * Construct x-api-signature per official Bitget Wallet Authentication docs:
+ * - Preserve raw JSON body string actually sent
+ * - Construct signed content using apiPath, body, x-api-key, x-api-timestamp
+ * - Alphabetically sort parameter keys: apiPath, body, x-api-key, x-api-timestamp
+ * - HMAC-SHA256 using BITGET_WALLET_API_SECRET
+ * - Base64 encode the result
+ * - Never log key, secret, signature, or authorization headers
+ */
+export function buildBitgetWalletSignature(
+  apiPath: string,
+  rawBodyStr: string,
+  apiKey: string,
+  timestampMs: string,
+  apiSecret: string
+): string {
+  const payloadToSign = `apiPath=${apiPath}&body=${rawBodyStr}&x-api-key=${apiKey}&x-api-timestamp=${timestampMs}`;
+  return crypto.createHmac('sha256', apiSecret).update(payloadToSign).digest('base64');
+}
+
 export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
   private baseUrl: string;
   private apiKey?: string;
+  private apiSecret?: string;
   private timeoutMs: number;
 
   constructor(config: BitgetWalletRwaConfig = {}) {
-    this.baseUrl = config.baseUrl || BITGET_WALLET_DEFAULT_URL;
+    this.baseUrl = config.baseUrl || BITGET_WALLET_BOPENAPI_URL;
     this.apiKey = config.apiKey || process.env.BITGET_WALLET_API_KEY;
+    this.apiSecret = config.apiSecret || process.env.BITGET_WALLET_API_SECRET;
     this.timeoutMs = config.timeoutMs || 5000;
   }
 
   async getWatchlist(): Promise<MarketContext[]> {
     const retrievedAtTimestamp = new Date().toISOString();
-    const endpointUrl = `${this.baseUrl}/bgw-pro/market/v3/rwa/stockList`;
+    const apiPath = '/bgw-pro/market/v3/rwa/stockList';
+    const endpointUrl = `${this.baseUrl}${apiPath}`;
 
-    // Requirement 1 & 7: Check API key requirement
-    if (!this.apiKey || this.apiKey.trim() === '') {
+    // Requirement 4: Require both BITGET_WALLET_API_KEY and BITGET_WALLET_API_SECRET
+    if (!this.apiKey || !this.apiSecret || this.apiKey.trim() === '' || this.apiSecret.trim() === '') {
       console.warn(
-        `[BitgetWalletRwaMarketProvider] Authentication failed: BITGET_WALLET_API_KEY environment variable is not configured. Fail closed.`
+        `[BitgetWalletRwaMarketProvider] Authentication failed: BITGET_WALLET_API_KEY or BITGET_WALLET_API_SECRET environment variable is missing. Fail closed.`
       );
       return [];
     }
@@ -55,15 +79,29 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
+      const timestampMs = Date.now().toString();
+      const rawBodyStr = JSON.stringify({ page: 1, pageSize: 50 });
+
+      // Requirement 3: Build HMAC-SHA256 Base64 signature
+      const signature = buildBitgetWalletSignature(
+        apiPath,
+        rawBodyStr,
+        this.apiKey,
+        timestampMs,
+        this.apiSecret
+      );
+
       const res = await fetch(endpointUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
-          'X-API-KEY': this.apiKey,
+          'x-api-key': this.apiKey,
+          'x-api-timestamp': timestampMs,
+          'x-api-signature': signature,
           'User-Agent': 'NoctiveRwaAgent/1.0',
         },
-        body: JSON.stringify({ page: 1, pageSize: 50 }),
+        body: rawBodyStr,
         signal: controller.signal,
       });
 
@@ -82,7 +120,7 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
       const items: MarketContext[] = [];
 
       for (const rawItem of rawList) {
-        // Requirement 3: Accept a market ONLY when data_source === "reality"
+        // Requirement 5: Accept a market ONLY if data_source === "reality"
         const dataSource = (rawItem.data_source || rawItem.dataSource || '').toLowerCase();
         if (dataSource !== 'reality') {
           continue;
@@ -113,7 +151,6 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
           .digest('hex')
           .substring(0, 16);
 
-        // Requirement 3 & 5: Persist Reality contract metadata & provenance
         const externalProvenance: ExternalInputProvenance = {
           sourceUrl: endpointUrl,
           publisherName: 'Bitget Wallet RWA / Reality Protocol',
