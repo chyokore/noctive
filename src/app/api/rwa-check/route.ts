@@ -18,6 +18,8 @@ async function handleRwaCheck(request: NextRequest) {
   const rwaProvider = new BitgetWalletRwaMarketProvider();
   const watchlist = await rwaProvider.getWatchlist();
 
+  const schemaDiagnostic = rwaProvider.schemaDiagnostic || undefined;
+
   if (watchlist.length > 0) {
     const sampleContracts = watchlist.slice(0, 3).map((item) => {
       const ext = (item as any).externalProvenance || {};
@@ -33,6 +35,7 @@ async function handleRwaCheck(request: NextRequest) {
       providerStatus: 'HEALTHY',
       realityContractsCount: watchlist.length,
       sampleContracts,
+      schemaDiagnostic,
       timestamp: new Date().toISOString(),
     });
   }
@@ -48,6 +51,7 @@ async function handleRwaCheck(request: NextRequest) {
       traceId: lastErr.traceId,
       realityContractsCount: 0,
       sampleContracts: [],
+      schemaDiagnostic,
       timestamp: new Date().toISOString(),
     });
   }
@@ -57,6 +61,7 @@ async function handleRwaCheck(request: NextRequest) {
     providerStatus: 'UNAVAILABLE_OR_EMPTY',
     realityContractsCount: 0,
     sampleContracts: [],
+    schemaDiagnostic,
     timestamp: new Date().toISOString(),
   });
 }

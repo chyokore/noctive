@@ -59,12 +59,24 @@ export interface BitgetWalletRwaLastError {
   traceId?: string;
 }
 
+export interface BitgetWalletRwaSchemaDiagnostic {
+  contentType?: string;
+  topLevelKeys?: string[];
+  code?: number | string;
+  status?: number | string;
+  dataType?: 'array' | 'object' | 'primitive' | 'null';
+  dataKeys?: string[];
+  hasList?: boolean;
+  listLength?: number;
+}
+
 export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
   private baseUrl: string;
   private apiKey?: string;
   private apiSecret?: string;
   private timeoutMs: number;
   public lastError: BitgetWalletRwaLastError | null = null;
+  public schemaDiagnostic: BitgetWalletRwaSchemaDiagnostic | null = null;
 
   constructor(config: BitgetWalletRwaConfig = {}) {
     this.baseUrl = config.baseUrl || BITGET_WALLET_BOPENAPI_URL;
@@ -138,7 +150,7 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
           // Response body was not valid JSON
         }
 
-        if (!traceId) {
+        if (!traceId && res.headers && typeof res.headers.get === 'function') {
           const headerTrace =
             res.headers.get('x-trace-id') ||
             res.headers.get('trace-id') ||
@@ -165,10 +177,70 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
         throw new Error(details.join(', '));
       }
 
+      const contentType = (res.headers && typeof res.headers.get === 'function' ? res.headers.get('content-type') : null) || undefined;
       const body = await res.json();
-      if (!body || body.code !== 0 || !Array.isArray(body.data?.list || body.data)) {
-        const errMsg = (body?.msg || body?.message || 'Invalid API response payload').replace(/[^a-zA-Z0-9 _.:-]/g, '').trim().slice(0, 200);
-        const errCode = body?.code;
+
+      let dataType: 'array' | 'object' | 'primitive' | 'null' = 'null';
+      let dataKeys: string[] = [];
+      let hasList = false;
+      let listLength = 0;
+
+      if (body && typeof body === 'object') {
+        const rawData = body.data;
+        if (Array.isArray(rawData)) {
+          dataType = 'array';
+          listLength = rawData.length;
+        } else if (rawData && typeof rawData === 'object') {
+          dataType = 'object';
+          dataKeys = Object.keys(rawData);
+          if (Array.isArray(rawData.list)) {
+            hasList = true;
+            listLength = rawData.list.length;
+          } else if (Array.isArray(rawData.items)) {
+            hasList = true;
+            listLength = rawData.items.length;
+          }
+        } else if (rawData !== undefined && rawData !== null) {
+          dataType = 'primitive';
+        }
+      }
+
+      this.schemaDiagnostic = {
+        contentType,
+        topLevelKeys: body && typeof body === 'object' ? Object.keys(body) : [],
+        code: body?.code !== undefined ? body.code : undefined,
+        status: body?.status !== undefined ? body.status : undefined,
+        dataType,
+        dataKeys,
+        hasList,
+        listLength,
+      };
+
+      const isSuccessCode =
+        body &&
+        (body.code === 0 ||
+          body.code === '0' ||
+          body.code === '00000' ||
+          body.code === 200 ||
+          body.code === '200' ||
+          body.status === 0 ||
+          body.status === '0' ||
+          body.status === 200);
+
+      const rawList: any[] = Array.isArray(body?.data?.list)
+        ? body.data.list
+        : Array.isArray(body?.data?.items)
+        ? body.data.items
+        : Array.isArray(body?.data)
+        ? body.data
+        : [];
+
+      if (!isSuccessCode) {
+        const errMsg = (body?.msg || body?.message || body?.error || 'Invalid API response payload')
+          .replace(/[^a-zA-Z0-9 _.:-]/g, '')
+          .trim()
+          .slice(0, 200);
+        const errCode = body?.code !== undefined ? body.code : body?.status;
         const traceId = (body?.trace_id || body?.traceId || '').replace(/[^a-zA-Z0-9_-]/g, '');
 
         this.lastError = {
@@ -178,10 +250,11 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
           traceId: traceId || undefined,
         };
 
-        throw new Error(`Code: ${errCode !== undefined ? errCode : 'N/A'}, Message: ${errMsg}${traceId ? `, traceId: ${traceId}` : ''}`);
+        throw new Error(
+          `Code: ${errCode !== undefined ? errCode : 'N/A'}, Message: ${errMsg}${traceId ? `, traceId: ${traceId}` : ''}`
+        );
       }
 
-      const rawList: any[] = Array.isArray(body.data?.list) ? body.data.list : body.data;
       const items: MarketContext[] = [];
 
       for (const rawItem of rawList) {
