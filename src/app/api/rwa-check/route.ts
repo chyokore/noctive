@@ -41,7 +41,7 @@ async function handleRwaCheck(request: NextRequest) {
   if (lastErr) {
     return NextResponse.json({
       success: false,
-      providerStatus: `HTTP_${lastErr.httpStatus || 500}`,
+      providerStatus: lastErr.httpStatus ? `HTTP_${lastErr.httpStatus}` : 'CONFIG_ERROR',
       httpStatus: lastErr.httpStatus,
       code: lastErr.code,
       message: lastErr.message,
