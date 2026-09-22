@@ -123,8 +123,8 @@ export default function CompetitionLogPage() {
         </div>
         <div className="flex items-center gap-4 text-[11px] text-slate-400">
           <div>
-            <span className="block text-[10px] uppercase text-slate-400">Event Source</span>
-            <span className="text-slate-200">SEC EDGAR (Form 8-K)</span>
+            <span className="block text-[10px] uppercase text-slate-400">Event Sources</span>
+            <span className="text-slate-200">SEC EDGAR (8-K) &amp; Reality Market Pulse</span>
           </div>
           <div className="h-6 w-px bg-navy-800" />
           <div>

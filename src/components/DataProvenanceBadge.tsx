@@ -20,29 +20,16 @@ export const DataProvenanceBadge: React.FC<DataProvenanceBadgeProps> = ({ proven
           Data Provenance &amp; Source Transparency
         </span>
 
-        <span
-          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-            isRwaReality
-              ? 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
-              : isMcp
-              ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
-              : isStooqRef
-              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-              : provenance.isDemoData
-              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-              : 'bg-electric-500/10 text-electric-300 border border-electric-500/30'
-          }`}
-        >
-          {isRwaReality
-            ? 'BITGET WALLET RWA / REALITY — READ-ONLY MARKET DATA'
-            : isMcp
-            ? 'BITGET OFFICIAL MCP — READ-ONLY US STOCKS'
-            : isStooqRef
-            ? 'LIVE EXTERNAL — UNDERLYING REFERENCE'
-            : provenance.isDemoData
-            ? 'DEMO DATA'
-            : 'LIVE EXTERNAL — VERIFIED BITGET RTOKEN'}
-        </span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-purple-500/10 text-purple-300 border border-purple-500/30">
+            VERIFIED BITGET WALLET REALITY QUOTE
+          </span>
+          {(ext?.publisherName?.includes('PULSE') || ext?.sourceUrl?.includes('pulse') || ext?.symbolMapping?.includes('PULSE')) && (
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+              LIVE REALITY MARKET PULSE
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-300">

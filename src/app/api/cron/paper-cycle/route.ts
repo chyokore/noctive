@@ -5,10 +5,11 @@ import { PaperExchange } from '@/lib/engine/paperExchange';
 import { ReceiptGenerator } from '@/lib/engine/receiptGenerator';
 import { getLedgerStore, hasOpenPositionForSymbol } from '@/lib/store/persistentStore';
 import { LiveEventProvider } from '@/lib/adapters/liveEventProvider';
-import { BitgetWalletRwaMarketProvider, APPROVED_EQUITY_WATCHLIST } from '@/lib/adapters/bitgetWalletRwaMarketProvider';
+import { BitgetWalletRwaMarketProvider, APPROVED_EQUITY_WATCHLIST, MarketContextWithRwaProvenance } from '@/lib/adapters/bitgetWalletRwaMarketProvider';
 import { createRunAuditRecord } from '@/lib/engine/runAuditGenerator';
 import { INITIAL_RISK_BUDGET } from '@/lib/store/noctiveStore';
-import { DecisionReceipt } from '@/types/domain';
+import { DecisionReceipt, RealityMarketSnapshot, EventItem, RealityMarketPulse } from '@/types/domain';
+import { evaluateRealityPulse, createPulseEventItem } from '@/lib/engine/realityPulseDetector';
 
 const NO_MARKET_SKIP_REASON = 'No verified matching rToken market snapshot; competition decision skipped.';
 
@@ -52,19 +53,61 @@ async function handlePaperCycle(request: NextRequest) {
   const events = await liveEventProvider.getLatestEvents();
   const marketProviderDomain = 'bopenapi.bgwapi.io (Bitget Wallet RWA / Reality Protocol)';
 
-  // Rule 1: Find qualifying live SEC events matching approved equity watchlist
-  const qualifyingEvents = events.filter((e) =>
+  // 1. Fetch live Reality quotes for approved equity watchlist (with 1 QPS rate limit)
+  const watchlistQuotes = await rwaMarketProvider.getWatchlist();
+  const pulseCandidates: { pulse: RealityMarketPulse; pulseEvent: EventItem; quote: MarketContextWithRwaProvenance }[] = [];
+
+  for (const rawQuote of watchlistQuotes) {
+    const quote = rawQuote as MarketContextWithRwaProvenance;
+    if (!quote || !quote.externalProvenance) continue;
+
+    const ticker = (quote.externalProvenance.underlyingStockSymbol || quote.symbol).toUpperCase().replace(/^R/, '');
+
+    // Persist independent quote snapshot in PostgreSQL / Store
+    const prevSnapshot = await store.getLatestRealitySnapshot(ticker);
+
+    const currentSnapshot: RealityMarketSnapshot = {
+      snapshotId: `snap-${ticker}-${Date.now()}`,
+      ticker,
+      rTokenSymbol: quote.symbol,
+      chain: quote.chain || 'ethereum',
+      contract: quote.contractAddress || '',
+      price: quote.currentPrice,
+      marketStatus: quote.sessionStatus === 'OVERNIGHT_ACTIVE' ? 'OPEN' : 'CLOSED',
+      timestamp: quote.externalProvenance.retrievedAtTimestamp || new Date().toISOString(),
+      traceId: quote.externalProvenance.traceId,
+      dataSource: 'reality',
+    };
+
+    try {
+      await store.saveRealitySnapshot(currentSnapshot);
+    } catch (snapErr) {
+      console.warn(`[CronPaperCycle] Failed to save Reality snapshot for ${ticker}:`, snapErr);
+    }
+
+    // Evaluate Reality Market Pulse (30-min window, >=1.5% move, verified Reality data, OPEN status)
+    const detectedPulse = evaluateRealityPulse(prevSnapshot, quote);
+    if (detectedPulse) {
+      const pulseEvent = createPulseEventItem(detectedPulse);
+      pulseCandidates.push({ pulse: detectedPulse, pulseEvent, quote });
+    }
+  }
+
+  // 2. Find qualifying live SEC events matching approved equity watchlist
+  const qualifyingSecEvents = events.filter((e) =>
     APPROVED_EQUITY_WATCHLIST.includes((e.affectedSymbol || '').toUpperCase())
   );
 
-  if (events.length === 0 || qualifyingEvents.length === 0) {
+  const hasEvents = qualifyingSecEvents.length > 0 || pulseCandidates.length > 0;
+
+  if (!hasEvents) {
     const audit = createRunAuditRecord({
       status: 'SAFE_SKIP',
       eventProviderStatus: events.length > 0 ? 'HEALTHY' : 'NO_EVENTS',
-      marketProviderStatus: 'HEALTHY',
+      marketProviderStatus: watchlistQuotes.length > 0 ? 'HEALTHY' : 'UNAVAILABLE',
       qwenInvoked: false,
       decisionCreated: false,
-      safeSkipReason: 'No qualifying live SEC event matching approved equity watchlist.',
+      safeSkipReason: 'No qualifying live SEC event or Reality Market Pulse matching approved equity watchlist.',
       marketProviderDomain,
     });
 
@@ -77,7 +120,7 @@ async function handlePaperCycle(request: NextRequest) {
     return NextResponse.json({
       success: true,
       skipped: true,
-      reason: 'No qualifying live SEC event matching approved equity watchlist.',
+      reason: 'No qualifying live SEC event or Reality Market Pulse matching approved equity watchlist.',
       pipelineStatus: 'NO_QUALIFYING_EVENTS',
       auditId: audit.auditId,
       auditHash: audit.hash,
@@ -93,11 +136,44 @@ async function handlePaperCycle(request: NextRequest) {
   let mappedIssuerTicker: string | undefined;
   let mappedRToken: string | undefined;
 
-  for (const evt of qualifyingEvents) {
+  // Process Reality Market Pulses
+  for (const candidate of pulseCandidates) {
+    const ticker = candidate.pulse.ticker;
+    mappedIssuerTicker = ticker;
+    mappedRToken = candidate.pulse.rTokenSymbol;
+
+    if (hasOpenPositionForSymbol(existingReceipts, ticker)) {
+      lastSkipReason = `Open paper position already exists for symbol ${ticker}; paper trade skipped per position limit guard.`;
+      console.log(`[CronPaperCycle] ${lastSkipReason}`);
+      continue;
+    }
+
+    const decision = await agentEngine.evaluateEventAsync(
+      candidate.pulseEvent,
+      candidate.quote,
+      [candidate.quote],
+      INITIAL_RISK_BUDGET
+    );
+    const risk = riskEngine.evaluateRisk(decision, candidate.quote, INITIAL_RISK_BUDGET);
+
+    if (!risk.isApproved) {
+      lastSkipReason = `Deterministic Risk Gate BLOCKED Reality Pulse AI proposal: ${risk.blockingReasons.join('; ')}`;
+      console.log(`[CronPaperCycle] ${lastSkipReason}`);
+      continue;
+    }
+
+    const order = paperExchange.executePaperOrder(decision, candidate.quote, risk.isApproved);
+    const receipt = receiptGenerator.generateReceipt(candidate.pulseEvent, candidate.quote, decision, risk, order);
+
+    await store.saveReceipt(receipt);
+    generatedReceipts.push(receipt);
+  }
+
+  // Process SEC events
+  for (const evt of qualifyingSecEvents) {
     const ticker = evt.affectedSymbol.toUpperCase();
     mappedIssuerTicker = ticker;
 
-    // Rule 1 & 2: Resolve matching live Reality quote via stockList -> stockInfo
     const quote = await rwaMarketProvider.getSingleQuote(ticker);
 
     if (!quote) {
@@ -108,7 +184,6 @@ async function handlePaperCycle(request: NextRequest) {
 
     mappedRToken = quote.symbol;
 
-    // Rule 3: Verify market status is OPEN / OVERNIGHT_ACTIVE
     const isMarketOpen = quote.sessionStatus === 'OVERNIGHT_ACTIVE' || quote.sessionStatus === 'REGULAR_CLOSED';
     if (!isMarketOpen) {
       lastSkipReason = `Market status is not OPEN for symbol ${ticker}; paper trade skipped.`;
@@ -116,14 +191,12 @@ async function handlePaperCycle(request: NextRequest) {
       continue;
     }
 
-    // Rule 3: Check open-position guard
     if (hasOpenPositionForSymbol(existingReceipts, ticker)) {
       lastSkipReason = `Open paper position already exists for symbol ${ticker}; paper trade skipped per position limit guard.`;
       console.log(`[CronPaperCycle] ${lastSkipReason}`);
       continue;
     }
 
-    // Pass verified Reality quote into Qwen + deterministic risk pipeline
     const watchlist = [quote];
     const decision = await agentEngine.evaluateEventAsync(evt, quote, watchlist, INITIAL_RISK_BUDGET);
     const risk = riskEngine.evaluateRisk(decision, quote, INITIAL_RISK_BUDGET);
@@ -134,7 +207,6 @@ async function handlePaperCycle(request: NextRequest) {
       continue;
     }
 
-    // Execute paper order & generate decision receipt with Reality provenance
     const order = paperExchange.executePaperOrder(decision, quote, risk.isApproved);
     const receipt = receiptGenerator.generateReceipt(evt, quote, decision, risk, order);
 

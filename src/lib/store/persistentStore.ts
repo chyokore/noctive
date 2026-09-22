@@ -1,4 +1,4 @@
-import { DecisionReceipt, CompetitionLogMetrics, LiveRunAuditRecord } from '@/types/domain';
+import { DecisionReceipt, CompetitionLogMetrics, LiveRunAuditRecord, RealityMarketSnapshot } from '@/types/domain';
 import { INITIAL_RECEIPTS } from './noctiveStore';
 import { Client } from 'pg';
 
@@ -8,6 +8,8 @@ export interface ILedgerStore {
   saveReceipt(receipt: DecisionReceipt): Promise<void>;
   getRunAudits(): Promise<LiveRunAuditRecord[]>;
   saveRunAudit(record: LiveRunAuditRecord): Promise<void>;
+  saveRealitySnapshot(snapshot: RealityMarketSnapshot): Promise<void>;
+  getLatestRealitySnapshot(ticker: string): Promise<RealityMarketSnapshot | null>;
   getCompetitionMetrics(isDemoFilter?: boolean): Promise<CompetitionLogMetrics>;
 }
 
@@ -178,6 +180,71 @@ export class LocalFileLedgerStore implements ILedgerStore {
   public async getCompetitionMetrics(isDemoFilter: boolean = false): Promise<CompetitionLogMetrics> {
     return computeMetricsFromReceipts(await this.getReceipts(), isDemoFilter);
   }
+
+  private static inMemorySnapshotCache: RealityMarketSnapshot[] | null = null;
+
+  public async getRealitySnapshots(): Promise<RealityMarketSnapshot[]> {
+    if (LocalFileLedgerStore.inMemorySnapshotCache !== null) {
+      return LocalFileLedgerStore.inMemorySnapshotCache;
+    }
+
+    if (typeof window === 'undefined' && !process.env.VERCEL) {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const dataDir = path.join(process.cwd(), '.data');
+        const filePath = path.join(dataDir, 'reality_snapshots.json');
+
+        if (fs.existsSync(filePath)) {
+          const fileData = fs.readFileSync(filePath, 'utf-8');
+          const parsed = JSON.parse(fileData);
+          if (Array.isArray(parsed)) {
+            LocalFileLedgerStore.inMemorySnapshotCache = parsed;
+            return parsed;
+          }
+        }
+      } catch {
+        // Fallback to memory
+      }
+    }
+
+    LocalFileLedgerStore.inMemorySnapshotCache = [];
+    return LocalFileLedgerStore.inMemorySnapshotCache;
+  }
+
+  public async getLatestRealitySnapshot(ticker: string): Promise<RealityMarketSnapshot | null> {
+    const snapshots = await this.getRealitySnapshots();
+    const norm = ticker.toUpperCase().replace(/^R/, '');
+    const matches = snapshots.filter((s) => s.ticker.toUpperCase().replace(/^R/, '') === norm);
+    if (matches.length === 0) return null;
+    matches.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return matches[0];
+  }
+
+  public async saveRealitySnapshot(snapshot: RealityMarketSnapshot): Promise<void> {
+    const snapshots = await this.getRealitySnapshots();
+    const updated = [snapshot, ...snapshots.filter((s) => s.snapshotId !== snapshot.snapshotId)];
+    LocalFileLedgerStore.inMemorySnapshotCache = updated;
+
+    if (typeof window === 'undefined') {
+      if (process.env.VERCEL) {
+        return;
+      }
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const dataDir = path.join(process.cwd(), '.data');
+        const filePath = path.join(dataDir, 'reality_snapshots.json');
+
+        if (!fs.existsSync(dataDir)) {
+          fs.mkdirSync(dataDir, { recursive: true });
+        }
+        fs.writeFileSync(filePath, JSON.stringify(updated, null, 2), 'utf-8');
+      } catch {
+        // Memory fallback
+      }
+    }
+  }
 }
 
 export class DatabaseLedgerStore implements ILedgerStore {
@@ -310,6 +377,73 @@ export class DatabaseLedgerStore implements ILedgerStore {
     }
   }
 
+  public async getLatestRealitySnapshot(ticker: string): Promise<RealityMarketSnapshot | null> {
+    if (typeof window === 'undefined') {
+      let client: Client | null = null;
+      try {
+        client = new Client({ connectionString: this.connectionString });
+        await client.connect();
+        const norm = ticker.toUpperCase().replace(/^R/, '');
+        const res = await client.query(
+          'SELECT payload FROM reality_market_snapshots WHERE ticker = $1 ORDER BY timestamp DESC LIMIT 1',
+          [norm]
+        );
+        await client.end();
+        if (res.rows && res.rows.length > 0) {
+          return res.rows[0].payload;
+        }
+        return null;
+      } catch (err: any) {
+        const sanitized = sanitizeDbError(err);
+        console.error(`[DatabaseLedgerStore] Persistent database query reality snapshot failed: ${sanitized}`);
+        if (client) {
+          try {
+            await client.end();
+          } catch {}
+        }
+        return null;
+      }
+    }
+    return null;
+  }
+
+  public async saveRealitySnapshot(snapshot: RealityMarketSnapshot): Promise<void> {
+    if (typeof window === 'undefined') {
+      let client: Client | null = null;
+      try {
+        client = new Client({ connectionString: this.connectionString });
+        await client.connect();
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS reality_market_snapshots (
+            snapshot_id VARCHAR(64) PRIMARY KEY,
+            ticker VARCHAR(32) NOT NULL,
+            timestamp TIMESTAMPTZ NOT NULL,
+            payload JSONB NOT NULL
+          );
+          CREATE INDEX IF NOT EXISTS idx_reality_snapshots_ticker ON reality_market_snapshots (ticker, timestamp DESC);
+        `);
+        const norm = snapshot.ticker.toUpperCase().replace(/^R/, '');
+        await client.query(
+          `INSERT INTO reality_market_snapshots (snapshot_id, ticker, timestamp, payload)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (snapshot_id) DO UPDATE SET payload = EXCLUDED.payload;`,
+          [snapshot.snapshotId, norm, snapshot.timestamp, JSON.stringify(snapshot)]
+        );
+        await client.end();
+        return;
+      } catch (err: any) {
+        const sanitized = sanitizeDbError(err);
+        console.error(`[DatabaseLedgerStore] Persistent database write reality snapshot failed: ${sanitized}`);
+        if (client) {
+          try {
+            await client.end();
+          } catch {}
+        }
+        throw new Error(`Persistent database write reality snapshot failed: ${sanitized}`);
+      }
+    }
+  }
+
   public async getCompetitionMetrics(isDemoFilter: boolean = false): Promise<CompetitionLogMetrics> {
     const receipts = await this.getReceipts();
     return computeMetricsFromReceipts(receipts, isDemoFilter);
@@ -392,6 +526,14 @@ export class PersistentStore implements ILedgerStore {
 
   public saveRunAudit(record: LiveRunAuditRecord): Promise<void> {
     return getLedgerStore().saveRunAudit(record);
+  }
+
+  public saveRealitySnapshot(snapshot: RealityMarketSnapshot): Promise<void> {
+    return getLedgerStore().saveRealitySnapshot(snapshot);
+  }
+
+  public getLatestRealitySnapshot(ticker: string): Promise<RealityMarketSnapshot | null> {
+    return getLedgerStore().getLatestRealitySnapshot(ticker);
   }
 
   public getCompetitionMetrics(isDemoFilter: boolean = false): Promise<CompetitionLogMetrics> {

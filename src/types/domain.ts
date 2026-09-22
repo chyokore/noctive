@@ -312,3 +312,33 @@ export interface UTASentinelScenario {
   expectedRecommendation: SentinelRecommendationAction;
 }
 
+export interface RealityMarketSnapshot {
+  snapshotId: string;
+  ticker: string;
+  rTokenSymbol: string;
+  chain: string;
+  contract: string;
+  price: number;
+  marketStatus: string;
+  timestamp: string;
+  traceId?: string;
+  dataSource: 'reality';
+}
+
+export interface RealityMarketPulse {
+  id: string;
+  ticker: string;
+  rTokenSymbol: string;
+  chain: string;
+  contract: string;
+  direction: 'UP' | 'DOWN';
+  percentageMovePct: number;
+  prevPrice: number;
+  currentPrice: number;
+  prevTimestamp: string;
+  currentTimestamp: string;
+  intervalMinutes: number;
+  traceId?: string;
+}
+
+
