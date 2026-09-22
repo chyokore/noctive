@@ -167,7 +167,18 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
 
       const body = await res.json();
       if (!body || body.code !== 0 || !Array.isArray(body.data?.list || body.data)) {
-        throw new Error(body?.msg || body?.message || 'Invalid API response payload');
+        const errMsg = (body?.msg || body?.message || 'Invalid API response payload').replace(/[^a-zA-Z0-9 _.:-]/g, '').trim().slice(0, 200);
+        const errCode = body?.code;
+        const traceId = (body?.trace_id || body?.traceId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+
+        this.lastError = {
+          httpStatus: res.status,
+          code: errCode,
+          message: errMsg,
+          traceId: traceId || undefined,
+        };
+
+        throw new Error(`Code: ${errCode !== undefined ? errCode : 'N/A'}, Message: ${errMsg}${traceId ? `, traceId: ${traceId}` : ''}`);
       }
 
       const rawList: any[] = Array.isArray(body.data?.list) ? body.data.list : body.data;
