@@ -8,7 +8,7 @@ export interface StooqConfig {
 }
 
 export const STOOQ_DEFAULT_URL =
-  'https://stooq.com/q/l/?s=nvda.us+aapl.us+msft.us+tsla.us+spy.us+qqq.us&f=sd2t2ohlcv&h&e=json';
+  'https://stooq.com/q/d/l/?s=nvda.us+aapl.us+msft.us+tsla.us+spy.us+qqq.us&i=d';
 
 export interface StockReferenceMapping {
   rToken: string;
@@ -95,7 +95,8 @@ export class StooqMarketDataProvider implements IMarketDataProvider {
       clearTimeout(timer);
 
       if (!res.ok) {
-        throw new Error(`Stooq public stock quote API HTTP ${res.status}`);
+        console.info(`[StooqMarketDataProvider] Non-blocking underlying reference fallback unavailable (HTTP status ${res.status}). Returning empty watchlist.`);
+        return [];
       }
 
       const rawText = await res.text();
@@ -209,7 +210,7 @@ export class StooqMarketDataProvider implements IMarketDataProvider {
       return items;
     } catch (err: any) {
       clearTimeout(timer);
-      console.warn(`[StooqMarketDataProvider] Failed to query Stooq stock quotes (${err.message}). Fail closed.`);
+      console.info(`[StooqMarketDataProvider] Non-blocking underlying reference fallback unavailable (${err.message}). Returning empty watchlist.`);
       return [];
     }
   }

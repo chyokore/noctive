@@ -189,4 +189,46 @@ describe('Bitget Wallet RWA Signed Market Provider (https://bopenapi.bgwapi.io /
     expect(serialized.includes(secretValue)).toBe(false);
     expect(serialized.includes('SENSITIVE_KEY_VALUE')).toBe(false);
   });
+
+  it('should log sanitized 403 diagnostics with error code, message, and traceId without leaking keys, secrets, or signatures', async () => {
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      headers: {
+        get: (h: string) => (h === 'x-trace-id' ? 'trace-http-403-abc' : null),
+      },
+      json: async () => ({
+        code: 40301,
+        msg: 'Invalid IP address or HMAC signature',
+        trace_id: 'trace-body-403-xyz',
+      }),
+    });
+
+    const apiKey = 'MY_API_KEY_SECRET_VAL';
+    const apiSecret = 'MY_API_SECRET_CONFIDENTIAL';
+    const provider = new BitgetWalletRwaMarketProvider({
+      apiKey,
+      apiSecret,
+    });
+
+    const watchlist = await provider.getWatchlist();
+
+    expect(watchlist).toEqual([]); // Fail closed
+    expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
+
+    const warnLog = consoleWarnSpy.mock.calls[0][0];
+    expect(warnLog).toContain('HTTP status 403');
+    expect(warnLog).toContain('Code: 40301');
+    expect(warnLog).toContain('Message: Invalid IP address or HMAC signature');
+    expect(warnLog).toContain('traceId: trace-body-403-xyz');
+
+    // Strict security assertions
+    expect(warnLog).not.toContain(apiKey);
+    expect(warnLog).not.toContain(apiSecret);
+    expect(warnLog).not.toContain('x-api-signature');
+    expect(warnLog).not.toContain('x-api-key');
+    expect(warnLog).not.toContain('payloadToSign');
+  });
 });

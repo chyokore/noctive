@@ -108,7 +108,43 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
       clearTimeout(timer);
 
       if (!res.ok) {
-        throw new Error(`HTTP status ${res.status}`);
+        let errCode: string | number | undefined;
+        let errMsg: string | undefined;
+        let traceId: string | undefined;
+
+        try {
+          const errBody = await res.json();
+          if (errBody && typeof errBody === 'object') {
+            if (errBody.code !== undefined) errCode = errBody.code;
+            else if (errBody.errorCode !== undefined) errCode = errBody.errorCode;
+
+            const msgCandidate = errBody.msg || errBody.message || errBody.error;
+            if (typeof msgCandidate === 'string') {
+              errMsg = msgCandidate.replace(/[^a-zA-Z0-9 _.:-]/g, '').trim().slice(0, 200);
+            }
+
+            const rawTrace = errBody.trace_id || errBody.traceId || errBody.trace;
+            if (rawTrace) {
+              traceId = String(rawTrace).replace(/[^a-zA-Z0-9_-]/g, '');
+            }
+          }
+        } catch {
+          // Response body was not valid JSON
+        }
+
+        if (!traceId) {
+          const headerTrace = res.headers.get('x-trace-id') || res.headers.get('trace-id') || res.headers.get('traceid');
+          if (headerTrace) {
+            traceId = headerTrace.replace(/[^a-zA-Z0-9_-]/g, '');
+          }
+        }
+
+        const details: string[] = [`HTTP status ${res.status}`];
+        if (errCode !== undefined) details.push(`Code: ${errCode}`);
+        if (errMsg) details.push(`Message: ${errMsg}`);
+        if (traceId) details.push(`traceId: ${traceId}`);
+
+        throw new Error(details.join(', '));
       }
 
       const body = await res.json();
