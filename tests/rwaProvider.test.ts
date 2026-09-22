@@ -241,4 +241,58 @@ describe('Bitget Wallet RWA Signed Market Provider (https://bopenapi.bgwapi.io /
     expect(warnLog).not.toContain('x-api-key');
     expect(warnLog).not.toContain('payloadToSign');
   });
+
+  it('should parse contracts array inside stock items and extract contracts with data_source === "reality"', async () => {
+    const mockApiResponse = {
+      status: 0,
+      traceId: 'trace-12345',
+      data: {
+        list: [
+          {
+            ticker: 'KGDEY',
+            name: 'Kingdee Intl Tokenized Stock',
+            icon: 'https://example.com/icon.png',
+            status: 'OPEN',
+            contracts: [
+              {
+                chain: 'morph',
+                contract: '0x4444444444444444444444444444444444444444',
+                symbol: 'rKGDEY',
+                data_source: 'reality',
+                status: 'OPEN',
+              },
+              {
+                chain: 'arbitrum',
+                contract: '0x5555555555555555555555555555555555555555',
+                symbol: 'rKGDEY',
+                data_source: 'ondo',
+                status: 'OPEN',
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: (h: string) => (h === 'content-type' ? 'application/json' : null) },
+      json: async () => mockApiResponse,
+    });
+
+    const provider = new BitgetWalletRwaMarketProvider({
+      apiKey: 'test-api-key',
+      apiSecret: 'test-api-secret',
+    });
+
+    const watchlist = await provider.getWatchlist();
+
+    expect(watchlist.length).toBe(1);
+    expect(watchlist[0].symbol).toBe('rKGDEY');
+    expect(watchlist[0].chain).toBe('morph');
+    expect(provider.schemaDiagnostic).toBeDefined();
+    expect(provider.schemaDiagnostic?.hasList).toBe(true);
+    expect(provider.schemaDiagnostic?.contractsType).toBe('array');
+    expect(provider.schemaDiagnostic?.contractItemKeys).toEqual(['chain', 'contract', 'symbol', 'data_source', 'status']);
+  });
 });
