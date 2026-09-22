@@ -1,4 +1,4 @@
-import { evaluateRealityPulse, evaluate24hRealityPulse, createPulseEventItem } from '../src/lib/engine/realityPulseDetector';
+import { evaluateRealityPulse, evaluate24hRealityPulse, createPulseEventItem, collectRealityDiagnostics, formatRealityDiagnosticsText } from '../src/lib/engine/realityPulseDetector';
 import { LocalFileLedgerStore, DatabaseLedgerStore, hasOpenPositionForSymbol } from '../src/lib/store/persistentStore';
 import { RealityMarketSnapshot, DecisionReceipt } from '../src/types/domain';
 import { MarketContextWithRwaProvenance } from '../src/lib/adapters/bitgetWalletRwaMarketProvider';
@@ -500,4 +500,142 @@ describe('Reality Market Pulse Detector & Snapshot Store', () => {
       expect(data.pipelineStatus).toBe('SAFE_SKIP');
     }, 15000);
   });
+
+  describe('Auditable Reality Diagnostics Summary (collectRealityDiagnostics & formatRealityDiagnosticsText)', () => {
+    it('should format 0 quotes sampled correctly when provider is unavailable', () => {
+      const summary = collectRealityDiagnostics([], new Map(), 'Bitget Wallet RWA API unavailable or offline');
+      expect(summary.sampledCount).toBe(0);
+      expect(summary.tickersWith24hChangeCount).toBe(0);
+
+      const text = formatRealityDiagnosticsText(summary);
+      expect(text).toContain('Reality Diagnostics: 0 quotes sampled (Bitget Wallet RWA API unavailable or offline).');
+    });
+
+    it('should identify max 24h change and max 30m change when moves are below 1.5% threshold', () => {
+      const quotes: MarketContextWithRwaProvenance[] = [
+        {
+          symbol: 'RNVDA',
+          name: 'NVDA Tokenized Stock',
+          currentPrice: 120.0,
+          prevClose: 119.0,
+          change24hPct: 0.84, // 0.84% < 1.5%
+          bidPrice: 119.9,
+          askPrice: 120.1,
+          spreadPct: 0.05,
+          volume24hUsd: 1000000,
+          liquidityDepthIndex: 90,
+          sessionStatus: 'OVERNIGHT_ACTIVE',
+          isDemoData: false,
+          chain: 'morph',
+          contractAddress: '0x111',
+          externalProvenance: {
+            sourceUrl: 'https://bopenapi.bgwapi.io/bgw-pro/market/v3/rwa/stockInfo',
+            publisherName: 'Bitget Wallet RWA / Reality Protocol',
+            retrievedAtTimestamp: new Date().toISOString(),
+            underlyingStockSymbol: 'NVDA',
+            dataSource: 'reality',
+            contentHash: 'hash-diag-1',
+            dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY',
+            raw24hChangePct: 0.84,
+          },
+        },
+        {
+          symbol: 'RTSLA',
+          name: 'TSLA Tokenized Stock',
+          currentPrice: 200.0,
+          prevClose: 202.4,
+          change24hPct: -1.18, // -1.18% < 1.5%
+          bidPrice: 199.9,
+          askPrice: 200.1,
+          spreadPct: 0.05,
+          volume24hUsd: 1000000,
+          liquidityDepthIndex: 90,
+          sessionStatus: 'OVERNIGHT_ACTIVE',
+          isDemoData: false,
+          chain: 'arbitrum',
+          contractAddress: '0x222',
+          externalProvenance: {
+            sourceUrl: 'https://bopenapi.bgwapi.io/bgw-pro/market/v3/rwa/stockInfo',
+            publisherName: 'Bitget Wallet RWA / Reality Protocol',
+            retrievedAtTimestamp: new Date().toISOString(),
+            underlyingStockSymbol: 'TSLA',
+            dataSource: 'reality',
+            contentHash: 'hash-diag-2',
+            dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY',
+            raw24hChangePct: -1.18,
+          },
+        },
+      ];
+
+      const prevSnapsMap = new Map<string, RealityMarketSnapshot | null>();
+      prevSnapsMap.set('NVDA', {
+        snapshotId: 'snap-nvda-old',
+        ticker: 'NVDA',
+        rTokenSymbol: 'RNVDA',
+        chain: 'morph',
+        contract: '0x111',
+        price: 119.5, // +0.42% over 40 mins < 1.5%
+        marketStatus: 'OPEN',
+        timestamp: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+        dataSource: 'reality',
+      });
+
+      const summary = collectRealityDiagnostics(quotes, prevSnapsMap);
+      expect(summary.sampledCount).toBe(2);
+      expect(summary.tickersWith24hChangeCount).toBe(2);
+      expect(summary.max24hChange).toBeDefined();
+      expect(summary.max24hChange?.ticker).toBe('TSLA');
+      expect(summary.max24hChange?.direction).toBe('DOWN');
+      expect(summary.max24hChange?.percentageMovePct).toBe(1.18);
+      expect(summary.max24hChange?.thresholdMet).toBe(false);
+
+      expect(summary.max30mChange).toBeDefined();
+      expect(summary.max30mChange?.ticker).toBe('NVDA');
+      expect(summary.max30mChange?.percentageMovePct).toBe(0.42);
+      expect(summary.max30mChange?.thresholdMet).toBe(false);
+
+      const text = formatRealityDiagnosticsText(summary);
+      expect(text).toContain('Reality Diagnostics: 2/6 quotes sampled (2 with valid 24h change).');
+      expect(text).toContain('Max 24h: TSLA DOWN 1.18% (threshold >=1.5% NOT MET).');
+      expect(text).toContain('Max 30m: NVDA UP 0.42% (threshold >=1.5% NOT MET).');
+    });
+
+    it('should correctly mark thresholdMet as TRUE when a move is >= 1.5%', () => {
+      const quotes: MarketContextWithRwaProvenance[] = [
+        {
+          symbol: 'RNVDA',
+          name: 'NVDA Tokenized Stock',
+          currentPrice: 120.0,
+          prevClose: 117.5,
+          change24hPct: 2.13, // 2.13% >= 1.5%
+          bidPrice: 119.9,
+          askPrice: 120.1,
+          spreadPct: 0.05,
+          volume24hUsd: 1000000,
+          liquidityDepthIndex: 90,
+          sessionStatus: 'OVERNIGHT_ACTIVE',
+          isDemoData: false,
+          chain: 'morph',
+          contractAddress: '0x111',
+          externalProvenance: {
+            sourceUrl: 'https://bopenapi.bgwapi.io/bgw-pro/market/v3/rwa/stockInfo',
+            publisherName: 'Bitget Wallet RWA / Reality Protocol',
+            retrievedAtTimestamp: new Date().toISOString(),
+            underlyingStockSymbol: 'NVDA',
+            dataSource: 'reality',
+            contentHash: 'hash-diag-3',
+            dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY',
+            raw24hChangePct: 2.13,
+          },
+        },
+      ];
+
+      const summary = collectRealityDiagnostics(quotes, new Map());
+      expect(summary.max24hChange?.thresholdMet).toBe(true);
+
+      const text = formatRealityDiagnosticsText(summary);
+      expect(text).toContain('Max 24h: NVDA UP 2.13% (THRESHOLD MET (>=1.5%)).');
+    });
+  });
 });
+

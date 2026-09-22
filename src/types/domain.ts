@@ -124,6 +124,24 @@ export interface ExternalInputProvenance {
   dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY' | 'BITGET_MCP_US_STOCKS_READ_ONLY' | 'LIVE_EXTERNAL' | 'LIVE_EXTERNAL_UNDERLYING_REFERENCE' | 'DEMO_DATA';
 }
 
+export interface RealityDiagnosticsSummary {
+  sampledCount: number;
+  tickersWith24hChangeCount: number;
+  max24hChange?: {
+    ticker: string;
+    direction: 'UP' | 'DOWN';
+    percentageMovePct: number;
+    thresholdMet: boolean;
+  };
+  max30mChange?: {
+    ticker: string;
+    direction: 'UP' | 'DOWN';
+    percentageMovePct: number;
+    thresholdMet: boolean;
+  };
+  reasonIfNoQuotes?: string;
+}
+
 export interface LivePipelineStatus {
   lastRunTimestamp: string;
   eventsFetched: number;

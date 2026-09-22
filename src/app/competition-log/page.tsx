@@ -230,7 +230,11 @@ export default function CompetitionLogPage() {
                       <td className="py-3 text-slate-300">{audit.marketProviderDomain}</td>
                       <td className="py-3 text-slate-300">{audit.qwenInvoked ? 'YES' : 'NO'}</td>
                       <td className="py-3 text-slate-300">{audit.decisionCreated ? 'YES' : 'NO'}</td>
-                      <td className="py-3 text-slate-400 max-w-xs truncate">{audit.safeSkipReason || 'Verified Live Market Decision Created'}</td>
+                      <td className="py-3 text-slate-300 max-w-md font-mono text-[11px]" title={audit.safeSkipReason || 'Verified Live Market Decision Created'}>
+                        <div className="line-clamp-2 font-mono text-[11px] text-slate-300">
+                          {audit.safeSkipReason || 'Verified Live Market Decision Created'}
+                        </div>
+                      </td>
                       <td className="py-3 text-right font-bold text-electric-400">{audit.hash}</td>
                     </tr>
                   ))

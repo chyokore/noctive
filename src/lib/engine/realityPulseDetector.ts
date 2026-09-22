@@ -1,7 +1,7 @@
-import { EventItem, MarketContext, RealityMarketSnapshot, RealityMarketPulse } from '@/types/domain';
+import { EventItem, MarketContext, RealityMarketSnapshot, RealityMarketPulse, RealityDiagnosticsSummary } from '@/types/domain';
 import { MarketContextWithRwaProvenance } from '@/lib/adapters/bitgetWalletRwaMarketProvider';
 
-export type { RealityMarketPulse };
+export type { RealityMarketPulse, RealityDiagnosticsSummary };
 
 /**
  * Trigger 1: 30-Minute Snapshot Interval Pulse (SNAPSHOT_30M)
@@ -172,3 +172,113 @@ export function createPulseEventItem(pulse: RealityMarketPulse): EventItem {
     isDemoData: false,
   };
 }
+
+/**
+ * Collects auditable Reality market diagnostics across sampled quotes & snapshot histories.
+ */
+export function collectRealityDiagnostics(
+  quotes: MarketContextWithRwaProvenance[],
+  prevSnapshotsMap: Map<string, RealityMarketSnapshot | null>,
+  reasonIfNoQuotes?: string
+): RealityDiagnosticsSummary {
+  const sampledCount = quotes.length;
+  if (sampledCount === 0) {
+    return {
+      sampledCount: 0,
+      tickersWith24hChangeCount: 0,
+      reasonIfNoQuotes: reasonIfNoQuotes || 'Bitget Wallet RWA API returned 0 quotes',
+    };
+  }
+
+  let tickersWith24hChangeCount = 0;
+  let max24hObj: { ticker: string; direction: 'UP' | 'DOWN'; percentageMovePct: number; thresholdMet: boolean } | undefined;
+  let highestAbs24h = -1;
+
+  let max30mObj: { ticker: string; direction: 'UP' | 'DOWN'; percentageMovePct: number; thresholdMet: boolean } | undefined;
+  let highestAbs30m = -1;
+
+  for (const quote of quotes) {
+    if (!quote) continue;
+    const ticker = (quote.externalProvenance?.underlyingStockSymbol || quote.symbol).toUpperCase().replace(/^R/, '');
+
+    // 24h Native Change Check
+    const change24hPct =
+      quote.externalProvenance?.raw24hChangePct ?? quote.change24hPct;
+
+    if (change24hPct !== undefined && change24hPct !== null && !isNaN(change24hPct)) {
+      tickersWith24hChangeCount++;
+      const abs24h = Math.abs(change24hPct);
+      if (abs24h > highestAbs24h) {
+        highestAbs24h = abs24h;
+        max24hObj = {
+          ticker,
+          direction: change24hPct >= 0 ? 'UP' : 'DOWN',
+          percentageMovePct: parseFloat(abs24h.toFixed(2)),
+          thresholdMet: abs24h >= 1.5,
+        };
+      }
+    }
+
+    // 30m Snapshot Change Check
+    const prevSnap = prevSnapshotsMap.get(ticker);
+    if (prevSnap && prevSnap.price > 0 && quote.currentPrice > 0) {
+      const prevTimeMs = new Date(prevSnap.timestamp).getTime();
+      const currentTimeMs = new Date(quote.externalProvenance?.retrievedAtTimestamp || new Date()).getTime();
+
+      if (!isNaN(prevTimeMs) && !isNaN(currentTimeMs) && currentTimeMs > prevTimeMs) {
+        const intervalMinutes = (currentTimeMs - prevTimeMs) / 60000;
+        if (intervalMinutes >= 30.0) {
+          const rawRatio = (quote.currentPrice - prevSnap.price) / prevSnap.price;
+          const abs30m = Math.abs(rawRatio * 100);
+          if (abs30m > highestAbs30m) {
+            highestAbs30m = abs30m;
+            max30mObj = {
+              ticker,
+              direction: rawRatio >= 0 ? 'UP' : 'DOWN',
+              percentageMovePct: parseFloat(abs30m.toFixed(2)),
+              thresholdMet: abs30m >= 1.5,
+            };
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    sampledCount,
+    tickersWith24hChangeCount,
+    max24hChange: max24hObj,
+    max30mChange: max30mObj,
+    reasonIfNoQuotes: reasonIfNoQuotes,
+  };
+}
+
+/**
+ * Formats RealityDiagnosticsSummary into compact judge-readable wording.
+ */
+export function formatRealityDiagnosticsText(summary: RealityDiagnosticsSummary): string {
+  if (summary.sampledCount === 0) {
+    const reason = summary.reasonIfNoQuotes || 'Bitget Wallet RWA API returned 0 quotes';
+    return `Reality Diagnostics: 0 quotes sampled (${reason}).`;
+  }
+
+  const parts: string[] = [];
+  parts.push(`Reality Diagnostics: ${summary.sampledCount}/6 quotes sampled (${summary.tickersWith24hChangeCount} with valid 24h change).`);
+
+  if (summary.max24hChange) {
+    const metStr = summary.max24hChange.thresholdMet ? 'THRESHOLD MET (>=1.5%)' : 'threshold >=1.5% NOT MET';
+    parts.push(`Max 24h: ${summary.max24hChange.ticker} ${summary.max24hChange.direction} ${summary.max24hChange.percentageMovePct.toFixed(2)}% (${metStr}).`);
+  } else {
+    parts.push(`Max 24h: None (no valid 24h change field reported).`);
+  }
+
+  if (summary.max30mChange) {
+    const metStr = summary.max30mChange.thresholdMet ? 'THRESHOLD MET (>=1.5%)' : 'threshold >=1.5% NOT MET';
+    parts.push(`Max 30m: ${summary.max30mChange.ticker} ${summary.max30mChange.direction} ${summary.max30mChange.percentageMovePct.toFixed(2)}% (${metStr}).`);
+  } else {
+    parts.push(`Max 30m: None (snapshot interval <30m or initial baseline).`);
+  }
+
+  return parts.join(' ');
+}
+
