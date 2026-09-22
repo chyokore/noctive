@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { PersistentStore, getLedgerStoreInfo } from '@/lib/store/persistentStore';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const store = new PersistentStore();
 
 export async function GET(request: Request) {
@@ -24,12 +27,19 @@ export async function GET(request: Request) {
   const audits = await store.getRunAudits();
   const storageInfo = getLedgerStoreInfo();
 
-  return NextResponse.json({
-    success: true,
-    receipts: filtered,
-    allReceipts: receipts,
-    metrics,
-    audits,
-    storageInfo,
-  });
+  return NextResponse.json(
+    {
+      success: true,
+      receipts: filtered,
+      allReceipts: receipts,
+      metrics,
+      audits,
+      storageInfo,
+    },
+    {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      },
+    }
+  );
 }

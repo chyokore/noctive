@@ -273,4 +273,48 @@ describe('Reality Market Pulse Detector & Snapshot Store', () => {
       expect(snapshot).toBeNull();
     });
   });
+
+  describe('No-Pulse Cycle Audit & Snapshot Persistence', () => {
+    it('should verify a valid no-pulse cycle still saves snapshots and creates one SAFE_SKIP audit', async () => {
+      const { GET: cronHandler } = await import('../src/app/api/cron/paper-cycle/route');
+      const { NextRequest } = await import('next/server');
+      const store = new LocalFileLedgerStore();
+
+      const snap: RealityMarketSnapshot = {
+        snapshotId: `snap-nvda-nopulse-${Date.now()}`,
+        ticker: 'NVDA',
+        rTokenSymbol: 'RNVDA',
+        chain: 'morph',
+        contract: '0x1111111111111111111111111111111111111111',
+        price: 120.0,
+        marketStatus: 'OPEN',
+        timestamp: new Date().toISOString(),
+        dataSource: 'reality',
+      };
+
+      await store.saveRealitySnapshot(snap);
+      const savedSnap = await store.getLatestRealitySnapshot('NVDA');
+      expect(savedSnap).not.toBeNull();
+      expect(savedSnap?.ticker).toBe('NVDA');
+
+      process.env.CRON_SECRET = 'test-cron-secret';
+      delete process.env.VERCEL;
+
+      const req = new NextRequest('http://localhost:3000/api/cron/paper-cycle', {
+        method: 'GET',
+        headers: {
+          authorization: 'Bearer test-cron-secret',
+        },
+      });
+
+      const response = await cronHandler(req);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(data.auditId).toBeDefined();
+      expect(data.skipped).toBe(true);
+      expect(data.pipelineStatus).toBe('SAFE_SKIP');
+    }, 15000);
+  });
 });
