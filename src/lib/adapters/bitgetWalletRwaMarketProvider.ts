@@ -80,7 +80,7 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
 
     try {
       const timestampMs = Date.now().toString();
-      const rawBodyStr = JSON.stringify({ page: 1, pageSize: 50 });
+      const rawBodyStr = '{}';
 
       // Requirement 3: Build HMAC-SHA256 Base64 signature
       const signature = buildBitgetWalletSignature(

@@ -15,7 +15,7 @@ describe('Bitget Wallet RWA Signed Market Provider (https://bopenapi.bgwapi.io /
 
   it('should construct valid HMAC-SHA256 Base64 x-api-signature with alphabetically sorted parameter keys', () => {
     const apiPath = '/bgw-pro/market/v3/rwa/stockList';
-    const rawBodyStr = JSON.stringify({ page: 1, pageSize: 50 });
+    const rawBodyStr = '{}';
     const apiKey = 'test-key-123';
     const timestampMs = '1700000000000';
     const apiSecret = 'test-secret-456';
@@ -41,7 +41,7 @@ describe('Bitget Wallet RWA Signed Market Provider (https://bopenapi.bgwapi.io /
     expect(watchlist2).toEqual([]);
   });
 
-  it('should construct signed HTTP headers (x-api-key, x-api-timestamp, x-api-signature) and target bopenapi endpoint', async () => {
+  it('should construct signed HTTP headers and send raw body string "{}" to bopenapi stockList endpoint', async () => {
     const mockApiResponse = {
       code: 0,
       msg: 'success',
@@ -64,10 +64,12 @@ describe('Bitget Wallet RWA Signed Market Provider (https://bopenapi.bgwapi.io /
 
     let capturedHeaders: any = null;
     let capturedUrl: string = '';
+    let capturedBody: string = '';
 
     global.fetch = vi.fn().mockImplementation(async (url: string, opts: any) => {
       capturedUrl = url;
       capturedHeaders = opts.headers;
+      capturedBody = opts.body;
       return {
         ok: true,
         json: async () => mockApiResponse,
@@ -82,6 +84,7 @@ describe('Bitget Wallet RWA Signed Market Provider (https://bopenapi.bgwapi.io /
     const watchlist = await provider.getWatchlist();
 
     expect(capturedUrl).toBe(`${BITGET_WALLET_BOPENAPI_URL}/bgw-pro/market/v3/rwa/stockList`);
+    expect(capturedBody).toBe('{}');
     expect(capturedHeaders['x-api-key']).toBe('test-api-key');
     expect(capturedHeaders['x-api-timestamp']).toBeDefined();
     expect(capturedHeaders['x-api-signature']).toBeDefined();
