@@ -52,11 +52,19 @@ export function buildBitgetWalletSignature(
   return signPayload(payload, apiSecret);
 }
 
+export interface BitgetWalletRwaLastError {
+  httpStatus?: number;
+  code?: string | number;
+  message?: string;
+  traceId?: string;
+}
+
 export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
   private baseUrl: string;
   private apiKey?: string;
   private apiSecret?: string;
   private timeoutMs: number;
+  public lastError: BitgetWalletRwaLastError | null = null;
 
   constructor(config: BitgetWalletRwaConfig = {}) {
     this.baseUrl = config.baseUrl || BITGET_WALLET_BOPENAPI_URL;
@@ -143,6 +151,13 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
         if (errCode !== undefined) details.push(`Code: ${errCode}`);
         if (errMsg) details.push(`Message: ${errMsg}`);
         if (traceId) details.push(`traceId: ${traceId}`);
+
+        this.lastError = {
+          httpStatus: res.status,
+          code: errCode,
+          message: errMsg,
+          traceId,
+        };
 
         throw new Error(details.join(', '));
       }
