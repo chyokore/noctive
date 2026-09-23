@@ -82,8 +82,8 @@ export default function DecisionLedgerPage() {
               IMMUTABLE RECEIPTS
             </span>
           </div>
-          <p className="text-xs text-slate-400 font-mono mt-1">
-            Searchable, timestamped record of all event evidence, agent decisions, risk gate evaluations, and paper orders.
+          <p className="text-xs text-slate-300 font-mono mt-1">
+            Stress-test tokenized-equity collateral before overnight risk becomes a position problem.
           </p>
         </div>
 
@@ -174,7 +174,7 @@ export default function DecisionLedgerPage() {
               className="w-full px-3 py-2 rounded-lg bg-navy-950 border border-navy-800 text-slate-200 focus:outline-none focus:border-electric-500"
             >
               <option value="ALL">All Execution Outcomes</option>
-              <option value="APPROVED_EXECUTED">Approved & Executed</option>
+              <option value="APPROVED_EXECUTED">Approved &amp; Executed</option>
               <option value="NOISE_REJECTED_STAND_DOWN">Stand Down (Noise)</option>
               <option value="RISK_BLOCKED">Risk Gate Blocked</option>
             </select>
@@ -222,7 +222,7 @@ export default function DecisionLedgerPage() {
                 <tr>
                   <td colSpan={8} className="py-8 text-center text-slate-400">
                     {streamFilter === 'LIVE_ONLY'
-                      ? 'No live competition paper decision receipts created yet. (Vercel cron ran safely with status SAFE_SKIP due to no fresh qualifying SEC filings).'
+                      ? 'No live competition decision receipts created yet. Scheduled cycles check live market feeds and log clean audits when no review threshold is met.'
                       : 'No decision receipts match the active filters.'}
                   </td>
                 </tr>

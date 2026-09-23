@@ -58,7 +58,7 @@ async function handlePaperCycle(request: NextRequest) {
   const marketProviderDomain = 'bopenapi.bgwapi.io (Bitget Wallet RWA / Reality Protocol)';
 
   let runStatus: 'QUALIFIED' | 'SAFE_SKIP' = 'SAFE_SKIP';
-  let safeSkipReason = 'No qualifying live SEC event or Reality Market Pulse matching approved equity watchlist.';
+  let safeSkipReason = 'No live trigger met the review threshold. Audit recorded.';
   let eventProviderStatus: 'HEALTHY' | 'NO_EVENTS' | 'UNAVAILABLE' = 'NO_EVENTS';
   let marketProviderStatus: 'HEALTHY' | 'UNAVAILABLE' = 'UNAVAILABLE';
   let qwenInvoked = false;
@@ -273,8 +273,8 @@ async function handlePaperCycle(request: NextRequest) {
       );
       const diagText = formatRealityDiagnosticsText(diagSummary);
 
-      if (safeSkipReason === 'No qualifying live SEC event or Reality Market Pulse matching approved equity watchlist.') {
-        safeSkipReason = `No qualifying live SEC event or Reality Market Pulse. ${diagText}`;
+      if (safeSkipReason === 'No live trigger met the review threshold. Audit recorded.') {
+        safeSkipReason = `No live trigger met the review threshold. Audit recorded. ${diagText}`;
       } else if (!safeSkipReason.includes('Reality Diagnostics:')) {
         safeSkipReason = `${safeSkipReason} ${diagText}`;
       }

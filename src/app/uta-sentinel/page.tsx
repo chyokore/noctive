@@ -80,14 +80,14 @@ export default function UTASentinelPage() {
           <div className="flex flex-wrap items-center gap-2">
             <ShieldAlert className="w-7 h-7 text-amber-400" />
             <h1 className="text-2xl font-bold text-white font-sans tracking-tight">
-              UTA Sentinel
+              Noctive UTA Sentinel
             </h1>
             <span className="px-2.5 py-0.5 rounded bg-electric-500/10 border border-electric-500/30 text-electric-400 text-xs font-mono font-semibold uppercase">
               Collateral-Aware Risk Intelligence
             </span>
           </div>
           <p className="text-xs text-slate-300 font-mono mt-1.5">
-            Monitors overnight rToken price shocks against illustrative portfolio margin support to prevent futures liquidation.
+            Stress-test tokenized-equity collateral before overnight risk becomes a position problem.
           </p>
         </div>
 

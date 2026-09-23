@@ -101,13 +101,13 @@ export default function CommandCenterPage() {
         <div>
           <div className="flex items-center gap-2">
             <Cpu className="w-6 h-6 text-electric-400" />
-            <h1 className="text-2xl font-bold text-white font-sans tracking-tight">Agent Command Center</h1>
+            <h1 className="text-2xl font-bold text-white font-sans tracking-tight">Noctive UTA Sentinel — Command Center</h1>
             <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-medium">
               LIVE AGENT FEED
             </span>
           </div>
-          <p className="text-xs text-slate-400 font-mono mt-1">
-            Collateral-aware overnight risk intelligence for rTokens, deterministic risk verification, and paper order execution.
+          <p className="text-xs text-slate-300 font-mono mt-1">
+            Stress-test tokenized-equity collateral before overnight risk becomes a position problem.
           </p>
         </div>
 

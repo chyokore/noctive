@@ -57,7 +57,7 @@ export default function CompetitionLogPage() {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <Trophy className="w-6 h-6 text-amber-400" />
-            <h1 className="text-2xl font-bold text-white font-sans tracking-tight">Competition Paper Log</h1>
+            <h1 className="text-2xl font-bold text-white font-sans tracking-tight">Competition Log &amp; Verification Run Audit</h1>
             <span className="px-2 py-0.5 rounded bg-electric-500/10 border border-electric-500/30 text-electric-400 text-xs font-mono font-medium">
               BITGET HACKATHON S2
             </span>
@@ -78,8 +78,8 @@ export default function CompetitionLogPage() {
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-400 font-mono mt-1">
-            Auditable paper-trading execution statistics, live verification run audit, and persistent decision ledger (Read-Only Judge View).
+          <p className="text-xs text-slate-300 font-mono mt-1">
+            Stress-test tokenized-equity collateral before overnight risk becomes a position problem.
           </p>
         </div>
 
@@ -228,7 +228,7 @@ export default function CompetitionLogPage() {
                               : 'bg-amber-500/10 border border-amber-500/30 text-amber-400'
                           }`}
                         >
-                          {audit.status.replace(/_/g, ' ')}
+                          {audit.status === 'SAFE_SKIP' ? 'AUDIT RECORDED' : audit.status === 'QUALIFIED' ? 'DECISION CREATED' : audit.status.replace(/_/g, ' ')}
                         </span>
                       </td>
                       <td className="py-3 text-slate-300">{audit.eventProviderDomain}</td>
@@ -238,7 +238,7 @@ export default function CompetitionLogPage() {
                       <td className="py-3 text-slate-300 max-w-lg font-mono text-[11px]">
                         <div className="space-y-1.5">
                           <div className="text-slate-200 leading-normal">
-                            {audit.safeSkipReason || 'Verified Live Market Decision Created'}
+                            {audit.safeSkipReason || 'No live trigger met the review threshold. Audit recorded.'}
                           </div>
                           {audit.safeSkipReason && (
                             <div>
@@ -253,7 +253,7 @@ export default function CompetitionLogPage() {
                           {expandedAuditIds[audit.auditId] && audit.safeSkipReason && (
                             <div className="mt-2 p-3 rounded-lg bg-navy-950 border border-navy-800 text-slate-200 font-mono text-[11px] leading-relaxed shadow-lg whitespace-pre-wrap">
                               <div className="text-electric-400 font-bold mb-1 border-b border-navy-800 pb-1 flex items-center justify-between">
-                                <span>REALITY AUDIT DIAGNOSTICS DETAIL</span>
+                                <span>AUDIT DIAGNOSTICS &amp; TELEMETRY DETAIL</span>
                                 <span className="text-[10px] text-slate-400 font-normal">{audit.auditId}</span>
                               </div>
                               {audit.safeSkipReason}
@@ -271,12 +271,25 @@ export default function CompetitionLogPage() {
         </div>
       )}
 
+      {/* Risk Blocked Safety Outcome Banner */}
+      <div className="p-4 rounded-xl bg-navy-900 border border-navy-800 flex items-start gap-3 text-xs font-mono">
+        <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 shrink-0">
+          <ShieldCheck className="w-5 h-5" />
+        </div>
+        <div className="space-y-1">
+          <span className="font-bold text-white font-sans text-sm block">Understanding Safety Outcomes</span>
+          <p className="text-slate-300 text-[11px] leading-relaxed font-sans">
+            A <strong className="text-rose-400 font-mono">LIVE RISK BLOCKED</strong> badge indicates a <strong>successful safety outcome</strong>. Noctive's 8-gate deterministic risk engine actively intervened to protect portfolio collateral by blocking AI proposals that failed liquidity, volatility, or position limit rules.
+          </p>
+        </div>
+      </div>
+
       {/* SECTION 2: Competition Paper Executions */}
       <div className="bg-navy-900 border border-navy-800 rounded-2xl p-6 space-y-4">
         <div className="flex items-center justify-between border-b border-navy-800 pb-3">
           <div>
             <h2 className="font-sans font-bold text-base text-white">
-              {activeTab === 'COMPETITION' ? 'Live Competition Paper Executions' : 'Demo Scenario Executions'}
+              {activeTab === 'COMPETITION' ? 'Live Competition Stream & Decision Ledger' : 'Demo Scenario Executions'}
             </h2>
             <p className="text-xs text-slate-400 font-mono">
               {activeTab === 'COMPETITION'

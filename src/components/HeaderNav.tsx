@@ -48,10 +48,10 @@ export const HeaderNav: React.FC = () => {
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <span className="font-sans font-bold text-lg text-white tracking-tight">NOCTIVE</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-electric-500/10 text-electric-400 border border-electric-500/20">v1.0</span>
+                  <span className="font-sans font-bold text-base sm:text-lg text-white tracking-tight">NOCTIVE UTA SENTINEL</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 font-semibold">SENTINEL</span>
                 </div>
-                <p className="text-[10px] text-slate-400 font-mono hidden sm:block">Collateral-Aware Overnight Risk Intelligence</p>
+                <p className="text-[10px] text-slate-400 font-mono hidden sm:block">Tokenized-Equity Collateral Risk Intelligence</p>
               </div>
             </Link>
 

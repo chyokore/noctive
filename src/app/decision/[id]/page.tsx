@@ -88,7 +88,7 @@ export default function DecisionDetailPage() {
 
         <div className="flex items-center gap-3 font-mono text-xs">
           <span
-            className={`px-3 py-1 rounded font-bold uppercase ${
+            className={`px-3 py-1 rounded font-bold text-xs uppercase ${
               status === 'APPROVED_EXECUTED'
                 ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
                 : status === 'RISK_BLOCKED'
@@ -96,7 +96,13 @@ export default function DecisionDetailPage() {
                 : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
             }`}
           >
-            {status.replace(/_/g, ' ')}
+            {!receipt.isDemoData
+              ? status === 'APPROVED_EXECUTED'
+                ? 'LIVE APPROVED'
+                : status === 'RISK_BLOCKED'
+                ? 'LIVE RISK BLOCKED'
+                : 'LIVE STAND DOWN'
+              : status.replace(/_/g, ' ')}
           </span>
 
           <button
