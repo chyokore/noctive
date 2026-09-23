@@ -240,6 +240,19 @@ export default function CompetitionLogPage() {
                           <div className="text-slate-200 leading-normal">
                             {audit.safeSkipReason || 'No live trigger met the review threshold. Audit recorded.'}
                           </div>
+
+                          {audit.receiptId && (
+                            <div className="pt-0.5">
+                              <Link
+                                href={`/decision/${audit.receiptId}`}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-electric-500/15 border border-electric-500/30 text-electric-300 font-mono text-[11px] font-bold hover:bg-electric-500/25 transition-all"
+                              >
+                                <span>View live decision</span>
+                                <ArrowRight className="w-3 h-3 text-electric-400" />
+                              </Link>
+                            </div>
+                          )}
+
                           {audit.safeSkipReason && (
                             <div>
                               <button
@@ -250,12 +263,18 @@ export default function CompetitionLogPage() {
                               </button>
                             </div>
                           )}
+
                           {expandedAuditIds[audit.auditId] && audit.safeSkipReason && (
                             <div className="mt-2 p-3 rounded-lg bg-navy-950 border border-navy-800 text-slate-200 font-mono text-[11px] leading-relaxed shadow-lg whitespace-pre-wrap">
                               <div className="text-electric-400 font-bold mb-1 border-b border-navy-800 pb-1 flex items-center justify-between">
                                 <span>AUDIT DIAGNOSTICS &amp; TELEMETRY DETAIL</span>
                                 <span className="text-[10px] text-slate-400 font-normal">{audit.auditId}</span>
                               </div>
+                              {audit.receiptId && (
+                                <div className="text-emerald-400 font-bold mb-1 text-[11px]">
+                                  Saved Live Receipt ID: <span className="text-white font-mono">{audit.receiptId}</span>
+                                </div>
+                              )}
                               {audit.safeSkipReason}
                             </div>
                           )}

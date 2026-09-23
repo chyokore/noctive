@@ -184,6 +184,8 @@ export interface LiveRunAuditRecord {
   marketProviderStatus: 'HEALTHY' | 'UNVERIFIED_EQUITY_MARKET' | 'UNAVAILABLE';
   qwenInvoked: boolean;
   decisionCreated: boolean;
+  receiptId?: string;
+  receiptIds?: string[];
   safeSkipReason?: string;
   eventProviderDomain: string;
   marketProviderDomain: string;

@@ -7,6 +7,8 @@ export interface CreateRunAuditOptions {
   marketProviderStatus: 'HEALTHY' | 'UNVERIFIED_EQUITY_MARKET' | 'UNAVAILABLE';
   qwenInvoked: boolean;
   decisionCreated: boolean;
+  receiptId?: string;
+  receiptIds?: string[];
   safeSkipReason?: string;
   mappedIssuerTicker?: string;
   mappedRToken?: string;
@@ -32,6 +34,7 @@ export function createRunAuditRecord(opts: CreateRunAuditOptions): LiveRunAuditR
     marketProviderStatus: opts.marketProviderStatus,
     qwenInvoked: opts.qwenInvoked,
     decisionCreated: opts.decisionCreated,
+    receiptId: opts.receiptId || '',
     safeSkipReason: opts.safeSkipReason || '',
     eventProviderDomain,
     marketProviderDomain,
@@ -50,6 +53,8 @@ export function createRunAuditRecord(opts: CreateRunAuditOptions): LiveRunAuditR
     marketProviderStatus: opts.marketProviderStatus,
     qwenInvoked: opts.qwenInvoked,
     decisionCreated: opts.decisionCreated,
+    receiptId: opts.receiptId,
+    receiptIds: opts.receiptIds,
     safeSkipReason: opts.safeSkipReason,
     eventProviderDomain,
     marketProviderDomain,

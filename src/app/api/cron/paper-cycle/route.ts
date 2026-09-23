@@ -281,12 +281,17 @@ async function handlePaperCycle(request: NextRequest) {
     }
 
     // FINALLY-STYLE GUARANTEE: Always write exactly ONE LiveRunAuditRecord
+    const primaryReceiptId = generatedReceipts.length > 0 ? generatedReceipts[0].receiptId : undefined;
+    const allReceiptIds = generatedReceipts.length > 0 ? generatedReceipts.map((r) => r.receiptId) : undefined;
+
     const audit = createRunAuditRecord({
       status: runStatus,
       eventProviderStatus,
       marketProviderStatus,
       qwenInvoked,
       decisionCreated,
+      receiptId: primaryReceiptId,
+      receiptIds: allReceiptIds,
       safeSkipReason,
       marketProviderDomain,
       mappedIssuerTicker,

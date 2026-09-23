@@ -27,25 +27,21 @@ export default function LandingPage() {
       <section className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-navy-900 via-navy-900 to-navy-950 border border-navy-800 p-8 md:p-12 shadow-2xl">
         <div className="absolute top-0 right-0 -mt-12 -mr-12 w-96 h-96 bg-electric-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 max-w-4xl space-y-6">
-          {/* Hackathon Track Badge */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-electric-500/10 border border-electric-500/30 text-electric-400 text-xs font-mono font-medium">
-            <Radio className="w-3.5 h-3.5 text-electric-400 animate-pulse" />
-            <span>Bitget AI Base Camp Hackathon S2 • Agentic Trading Track</span>
-          </div>
+          {/* Product Label & Headline */}
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono font-bold tracking-wide uppercase">
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+              <span>Noctive UTA Sentinel</span>
+            </div>
 
-          {/* Primary & Supporting Product Message */}
-          <div className="space-y-3">
-            <h1 className="text-4xl sm:text-6xl font-extrabold text-white tracking-tight leading-tight">
-              Noctive UTA Sentinel
-            </h1>
-            <p className="text-xl sm:text-2xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-electric-400 via-blue-300 to-amber-300 tracking-tight">
+            <h1 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight font-sans">
               Stress-test tokenized-equity collateral before overnight risk becomes a position problem.
+            </h1>
+
+            <p className="text-base sm:text-lg text-slate-300 leading-relaxed font-sans max-w-3xl pt-1">
+              Noctive combines verified Bitget Wallet Reality data, Qwen risk context, and deterministic safety gates to produce auditable, paper-only decisions for tokenized US equities.
             </p>
           </div>
-
-          <p className="text-sm sm:text-base text-slate-300 leading-relaxed font-sans max-w-3xl">
-            Operating during traditional US market closures, Noctive continuously evaluates 24/7 tokenized-equity (rToken) price movements and live SEC filings against illustrative Unified Trading Account (UTA) margin support—distinguishing true price discovery from low-liquidity overnight noise.
-          </p>
 
           {/* Action CTAs */}
           <div className="flex flex-wrap items-center gap-4 pt-2">
