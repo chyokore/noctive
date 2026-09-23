@@ -362,7 +362,13 @@ export default function CompetitionLogPage() {
                             : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
                         }`}
                       >
-                        {rcpt.status.replace(/_/g, ' ')}
+                        {!rcpt.isDemoData
+                          ? rcpt.status === 'APPROVED_EXECUTED'
+                            ? 'LIVE APPROVED'
+                            : rcpt.status === 'RISK_BLOCKED'
+                            ? 'LIVE RISK BLOCKED'
+                            : 'LIVE STAND DOWN'
+                          : rcpt.status.replace(/_/g, ' ')}
                       </span>
                     </td>
                     <td className="py-3 text-right">

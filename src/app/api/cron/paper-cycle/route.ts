@@ -180,11 +180,6 @@ async function handlePaperCycle(request: NextRequest) {
       qwenInvoked = true;
 
       const risk = riskEngine.evaluateRisk(decision, candidate.quote, INITIAL_RISK_BUDGET);
-      if (!risk.isApproved) {
-        safeSkipReason = `Deterministic Risk Gate BLOCKED Reality Pulse AI proposal: ${risk.blockingReasons.join('; ')}`;
-        console.log(`[CronPaperCycle] ${safeSkipReason}`);
-        continue;
-      }
 
       const order = paperExchange.executePaperOrder(decision, candidate.quote, risk.isApproved);
       const receipt = receiptGenerator.generateReceipt(candidate.pulseEvent, candidate.quote, decision, risk, order);
@@ -192,6 +187,17 @@ async function handlePaperCycle(request: NextRequest) {
       await store.saveReceipt(receipt);
       generatedReceipts.push(receipt);
       decisionCreated = true;
+
+      if (!risk.isApproved) {
+        safeSkipReason = `Verified Live Decision Created (${receipt.status}): Paper Trade Created: NO. Deterministic Risk Gate BLOCKED Reality Pulse: ${risk.blockingReasons.join('; ')}`;
+        console.log(`[CronPaperCycle] ${safeSkipReason}`);
+      } else if (decision.action === 'STAND_DOWN') {
+        safeSkipReason = `Verified Live Decision Created (${receipt.status}): Paper Trade Created: NO. AI proposed STAND_DOWN.`;
+        console.log(`[CronPaperCycle] ${safeSkipReason}`);
+      } else {
+        safeSkipReason = `Verified Live Decision Created (${receipt.status}): Paper Trade Created: YES (${order.side} ${order.quantityTokens} ${order.symbol} @ $${order.entryPrice}).`;
+        console.log(`[CronPaperCycle] ${safeSkipReason}`);
+      }
     }
 
     // Process SEC events
@@ -232,11 +238,6 @@ async function handlePaperCycle(request: NextRequest) {
       qwenInvoked = true;
 
       const risk = riskEngine.evaluateRisk(decision, quote, INITIAL_RISK_BUDGET);
-      if (!risk.isApproved) {
-        safeSkipReason = `Deterministic Risk Gate BLOCKED AI proposal: ${risk.blockingReasons.join('; ')}`;
-        console.log(`[CronPaperCycle] ${safeSkipReason}`);
-        continue;
-      }
 
       const order = paperExchange.executePaperOrder(decision, quote, risk.isApproved);
       const receipt = receiptGenerator.generateReceipt(evt, quote, decision, risk, order);
@@ -244,6 +245,17 @@ async function handlePaperCycle(request: NextRequest) {
       await store.saveReceipt(receipt);
       generatedReceipts.push(receipt);
       decisionCreated = true;
+
+      if (!risk.isApproved) {
+        safeSkipReason = `Verified Live Decision Created (${receipt.status}): Paper Trade Created: NO. Deterministic Risk Gate BLOCKED: ${risk.blockingReasons.join('; ')}`;
+        console.log(`[CronPaperCycle] ${safeSkipReason}`);
+      } else if (decision.action === 'STAND_DOWN') {
+        safeSkipReason = `Verified Live Decision Created (${receipt.status}): Paper Trade Created: NO. AI proposed STAND_DOWN.`;
+        console.log(`[CronPaperCycle] ${safeSkipReason}`);
+      } else {
+        safeSkipReason = `Verified Live Decision Created (${receipt.status}): Paper Trade Created: YES (${order.side} ${order.quantityTokens} ${order.symbol} @ $${order.entryPrice}).`;
+        console.log(`[CronPaperCycle] ${safeSkipReason}`);
+      }
     }
 
     if (generatedReceipts.length > 0) {
@@ -275,7 +287,7 @@ async function handlePaperCycle(request: NextRequest) {
       marketProviderStatus,
       qwenInvoked,
       decisionCreated,
-      safeSkipReason: runStatus === 'QUALIFIED' ? undefined : safeSkipReason,
+      safeSkipReason,
       marketProviderDomain,
       mappedIssuerTicker,
       mappedRToken,

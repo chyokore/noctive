@@ -22,18 +22,40 @@ import {
   Terminal,
 } from 'lucide-react';
 
+import { DecisionReceipt } from '@/types/domain';
+
 export default function DecisionDetailPage() {
   const params = useParams();
   const router = useRouter();
   const receiptId = (params.id as string) || '';
 
+  const [receipt, setReceipt] = useState<DecisionReceipt | null>(
+    INITIAL_RECEIPTS.find((r) => r.receiptId === receiptId) || null
+  );
   const [copied, setCopied] = useState(false);
 
-  // Search initial receipts or fallback to first receipt
-  const receipt =
-    INITIAL_RECEIPTS.find((r) => r.receiptId === receiptId) || INITIAL_RECEIPTS[0];
+  React.useEffect(() => {
+    async function loadReceipt() {
+      try {
+        const res = await fetch('/api/ledger?demo=all');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.allReceipts)) {
+          const found = data.allReceipts.find((r: DecisionReceipt) => r.receiptId === receiptId);
+          if (found) {
+            setReceipt(found);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load receipt detail:', err);
+      }
+    }
+    if (receiptId) {
+      loadReceipt();
+    }
+  }, [receiptId]);
 
   const handleCopyJson = () => {
+    if (!receipt) return;
     navigator.clipboard.writeText(JSON.stringify(receipt, null, 2));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

@@ -1,7 +1,9 @@
 import { evaluateRealityPulse, evaluate24hRealityPulse, createPulseEventItem, collectRealityDiagnostics, formatRealityDiagnosticsText } from '../src/lib/engine/realityPulseDetector';
-import { LocalFileLedgerStore, DatabaseLedgerStore, hasOpenPositionForSymbol, hasRecentReceiptForSymbol } from '../src/lib/store/persistentStore';
+import { LocalFileLedgerStore, DatabaseLedgerStore, hasOpenPositionForSymbol, hasRecentReceiptForSymbol, computeMetricsFromReceipts } from '../src/lib/store/persistentStore';
 import { RealityMarketSnapshot, DecisionReceipt } from '../src/types/domain';
 import { MarketContextWithRwaProvenance } from '../src/lib/adapters/bitgetWalletRwaMarketProvider';
+import { ReceiptGenerator } from '../src/lib/engine/receiptGenerator';
+import { PaperExchange } from '../src/lib/engine/paperExchange';
 
 describe('Reality Market Pulse Detector & Snapshot Store', () => {
   const originalEnv = { ...process.env };
@@ -677,5 +679,121 @@ describe('Reality Market Pulse Detector & Snapshot Store', () => {
       expect(text).toContain('Max 24h: NVDA UP 2.13% (HIGH CONVICTION MET (>=1.5%)).');
     });
   });
+
+  describe('Live Decision Receipt Persistence for Risk-Blocked Candidates', () => {
+    it('should create exactly 1 live RISK_BLOCKED receipt with zero PnL and zero open positions when an early-warning candidate is blocked by risk', async () => {
+      const pulseEvent = createPulseEventItem({
+        ticker: 'TSLA',
+        rTokenSymbol: 'RTSLA',
+        triggerType: 'API_24H_CHANGE',
+        triggerProfile: 'EARLY_WARNING_RISK_REVIEW',
+        priceMovePct: -1.25,
+        currentPrice: 200.0,
+        chain: 'arbitrum',
+        contract: '0x2222222222222222222222222222222222222222',
+        timestamp: new Date().toISOString(),
+        traceId: 'trace-test-early-warning',
+      });
+
+      const quote: MarketContextWithRwaProvenance = {
+        symbol: 'RTSLA',
+        name: 'TSLA Tokenized Stock',
+        currentPrice: 200.0,
+        prevClose: 202.5,
+        change24hPct: -1.25,
+        bidPrice: 199.9,
+        askPrice: 200.1,
+        spreadPct: 0.05,
+        volume24hUsd: 500000,
+        liquidityDepthIndex: 85,
+        sessionStatus: 'OVERNIGHT_ACTIVE',
+        isDemoData: false,
+        chain: 'arbitrum',
+        contractAddress: '0x2222222222222222222222222222222222222222',
+        externalProvenance: {
+          sourceUrl: 'https://bopenapi.bgwapi.io/bgw-pro/market/v3/rwa/stockInfo',
+          publisherName: 'Bitget Wallet RWA / Reality Protocol',
+          retrievedAtTimestamp: new Date().toISOString(),
+          underlyingStockSymbol: 'TSLA',
+          dataSource: 'reality',
+          contentHash: 'hash-test-ew',
+          dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY',
+          triggerProfile: 'EARLY_WARNING_RISK_REVIEW',
+          raw24hChangePct: -1.25,
+          chain: 'arbitrum',
+          contractAddress: '0x2222222222222222222222222222222222222222',
+          traceId: 'trace-test-early-warning',
+        },
+      };
+
+      const aiDecision = {
+        id: 'dec-test-1',
+        eventId: pulseEvent.id,
+        action: 'ENTER_SHORT' as const,
+        confidence: 78,
+        reasoning: ['Early warning 24h decline of 1.25% detected on TSLA.'],
+        suggestedPositionSizeUsd: 2000,
+        calculatedPositionSizeUsd: 2000,
+        suggestedStopLossPct: 2.0,
+        suggestedTakeProfitPct: 4.0,
+        timestamp: new Date().toISOString(),
+      };
+
+      // Simulated Risk Gate BLOCKED outcome (e.g. VOLATILITY_LIQUIDITY_GUARD)
+      const riskGateResult = {
+        isApproved: false,
+        overallStatus: 'BLOCKED' as const,
+        rules: [
+          {
+            ruleId: 'VOLATILITY_LIQUIDITY_GUARD' as const,
+            name: 'Volatility & Liquidity Guard',
+            passed: false,
+            metricValue: '85',
+            thresholdValue: '90',
+            detail: 'Liquidity depth index 85 below minimum requirement 90 for early warning review.',
+          },
+        ],
+        blockingReasons: ['Liquidity depth index 85 below minimum requirement 90 for early warning review.'],
+        timestamp: new Date().toISOString(),
+      };
+
+      const paperExchange = new PaperExchange();
+      const receiptGenerator = new ReceiptGenerator();
+
+      // Order created with isRiskApproved = false -> status: REJECTED
+      const order = paperExchange.executePaperOrder(aiDecision, quote, riskGateResult.isApproved);
+      expect(order.status).toBe('REJECTED');
+
+      // Receipt generated
+      const receipt: DecisionReceipt = receiptGenerator.generateReceipt(
+        pulseEvent,
+        quote,
+        aiDecision,
+        riskGateResult,
+        order
+      );
+
+      expect(receipt.status).toBe('RISK_BLOCKED');
+      expect(receipt.isDemoData).toBe(false);
+      expect(receipt.provenance.triggerProfile).toBe('EARLY_WARNING_RISK_REVIEW');
+      expect(receipt.provenance.externalProvenance?.traceId).toBe('trace-test-early-warning');
+      expect(receipt.decisionAuthority.riskGateOutcome).toBe('BLOCKED');
+      expect(receipt.decisionAuthority.finalExecutedAction).toBe('STAND_DOWN');
+
+      // Check metrics computation
+      const metrics = computeMetricsFromReceipts([receipt], false);
+      expect(metrics.totalDecisions).toBe(1);
+      expect(metrics.approvedCount).toBe(0);
+      expect(metrics.riskBlockedCount).toBe(1);
+      expect(metrics.cumulativePnlUsd).toBe(0);
+
+      // Check open position limit guard
+      expect(hasOpenPositionForSymbol([receipt], 'TSLA')).toBe(false);
+
+      // Check 24-hour cooldown guard recognizes the receipt to prevent duplicate generation
+      expect(hasRecentReceiptForSymbol([receipt], 'TSLA', 24 * 60 * 60 * 1000)).toBe(true);
+    });
+  });
 });
+
 
