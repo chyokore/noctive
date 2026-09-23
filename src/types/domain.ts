@@ -122,6 +122,7 @@ export interface ExternalInputProvenance {
   dataAsOfTimestamp?: string;
   contentHash: string;
   dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY' | 'BITGET_MCP_US_STOCKS_READ_ONLY' | 'LIVE_EXTERNAL' | 'LIVE_EXTERNAL_UNDERLYING_REFERENCE' | 'DEMO_DATA';
+  triggerProfile?: 'HIGH_CONVICTION_PULSE' | 'EARLY_WARNING_RISK_REVIEW';
 }
 
 export interface RealityDiagnosticsSummary {
@@ -159,6 +160,7 @@ export interface DataProvenance {
   llmSource: string;
   isDemoData: boolean;
   externalProvenance?: ExternalInputProvenance;
+  triggerProfile?: 'HIGH_CONVICTION_PULSE' | 'EARLY_WARNING_RISK_REVIEW';
 }
 
 export interface DecisionAuthoritySummary {
@@ -358,6 +360,7 @@ export interface RealityMarketPulse {
   currentTimestamp: string;
   intervalMinutes: number;
   triggerType: 'SNAPSHOT_30M' | 'API_24H_CHANGE';
+  triggerProfile?: 'HIGH_CONVICTION_PULSE' | 'EARLY_WARNING_RISK_REVIEW';
   raw24hChangePct?: number;
   traceId?: string;
 }

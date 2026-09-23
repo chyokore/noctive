@@ -317,16 +317,22 @@ export default function CompetitionLogPage() {
                   <tr key={rcpt.receiptId} className="hover:bg-navy-850/50">
                     <td className="py-3 text-slate-400">{new Date(rcpt.timestamp).toLocaleTimeString()}</td>
                     <td className="py-3">
-                      {rcpt.provenance?.dataMode === 'LIVE_EXTERNAL_UNDERLYING_REFERENCE' ? (
+                      {rcpt.event?.source === 'BITGET_REALITY_EARLY_WARNING' ||
+                      rcpt.provenance?.triggerProfile === 'EARLY_WARNING_RISK_REVIEW' ||
+                      rcpt.provenance?.externalProvenance?.triggerProfile === 'EARLY_WARNING_RISK_REVIEW' ? (
+                        <span className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold">
+                          LIVE EARLY WARNING — VERIFIED REALITY DATA
+                        </span>
+                      ) : rcpt.provenance?.dataMode === 'LIVE_EXTERNAL_UNDERLYING_REFERENCE' ? (
                         <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold">
                           LIVE EXTERNAL — UNDERLYING REFERENCE
                         </span>
                       ) : rcpt.provenance?.dataMode === 'LIVE_EXTERNAL' || (!rcpt.isDemoData && rcpt.provenance?.dataMode !== 'DEMO_DATA') ? (
                         <span className="px-2 py-0.5 rounded bg-purple-500/10 border border-purple-500/30 text-purple-300 text-[10px] font-bold">
-                          LIVE EXTERNAL — VERIFIED BITGET RTOKEN
+                          LIVE HIGH CONVICTION — VERIFIED REALITY DATA
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold">
+                        <span className="px-2 py-0.5 rounded bg-slate-500/10 border border-slate-500/30 text-slate-400 text-[10px] font-bold">
                           DEMO DATA
                         </span>
                       )}

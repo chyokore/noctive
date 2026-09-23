@@ -568,4 +568,36 @@ export function hasOpenPositionForSymbol(receipts: DecisionReceipt[], symbolOrTi
   });
 }
 
+/**
+ * Helper: Checks whether a decision receipt has already been created for a given symbol
+ * within a specified cooldown window (default: 24 hours / 86,400,000 ms).
+ * Prevents duplicate decision receipt generation on unchanged 24h price movements.
+ */
+export function hasRecentReceiptForSymbol(
+  receipts: DecisionReceipt[],
+  symbolOrTicker: string,
+  cooldownWindowMs: number = 24 * 60 * 60 * 1000
+): boolean {
+  if (!Array.isArray(receipts) || receipts.length === 0) return false;
+  const norm = symbolOrTicker.toUpperCase().replace(/^R/, '');
+  const nowMs = Date.now();
+
+  return receipts.some((r) => {
+    if (!r.timestamp) return false;
+    const rcptTimeMs = new Date(r.timestamp).getTime();
+    if (isNaN(rcptTimeMs) || nowMs - rcptTimeMs >= cooldownWindowMs) return false;
+
+    const rSymbol = (
+      r.paperOrder?.symbol ||
+      r.marketContext?.symbol ||
+      r.event?.affectedSymbol ||
+      ''
+    )
+      .toUpperCase()
+      .replace(/^R/, '');
+
+    return rSymbol === norm;
+  });
+}
+
 

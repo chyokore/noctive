@@ -81,6 +81,7 @@ export class ReceiptGenerator {
           : 'Deterministic Risk Engine + LLM',
       isDemoData: isDemo,
       externalProvenance: extProvenance,
+      triggerProfile: extProvenance?.triggerProfile,
     };
 
     const payloadToHash = JSON.stringify({

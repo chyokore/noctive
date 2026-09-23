@@ -1,5 +1,5 @@
 import { evaluateRealityPulse, evaluate24hRealityPulse, createPulseEventItem, collectRealityDiagnostics, formatRealityDiagnosticsText } from '../src/lib/engine/realityPulseDetector';
-import { LocalFileLedgerStore, DatabaseLedgerStore, hasOpenPositionForSymbol } from '../src/lib/store/persistentStore';
+import { LocalFileLedgerStore, DatabaseLedgerStore, hasOpenPositionForSymbol, hasRecentReceiptForSymbol } from '../src/lib/store/persistentStore';
 import { RealityMarketSnapshot, DecisionReceipt } from '../src/types/domain';
 import { MarketContextWithRwaProvenance } from '../src/lib/adapters/bitgetWalletRwaMarketProvider';
 
@@ -275,6 +275,7 @@ describe('Reality Market Pulse Detector & Snapshot Store', () => {
       expect(pulse).not.toBeNull();
       expect(pulse?.ticker).toBe('NVDA');
       expect(pulse?.triggerType).toBe('API_24H_CHANGE');
+      expect(pulse?.triggerProfile).toBe('HIGH_CONVICTION_PULSE');
       expect(pulse?.direction).toBe('UP');
       expect(pulse?.percentageMovePct).toBe(2.13);
       expect(pulse?.raw24hChangePct).toBe(2.1276);
@@ -285,49 +286,13 @@ describe('Reality Market Pulse Detector & Snapshot Store', () => {
       expect(eventItem.affectedSymbol).toBe('NVDA');
     });
 
-    it('should TRIGGER 24h pulse for DOWN direction when native change is <= -1.5%', () => {
-      const quote: MarketContextWithRwaProvenance = {
-        symbol: 'RAAPL',
-        name: 'AAPL Tokenized Stock',
-        currentPrice: 200.0,
-        prevClose: 204.0,
-        change24hPct: -1.96, // -1.96% <= -1.5%
-        bidPrice: 199.9,
-        askPrice: 200.1,
-        spreadPct: 0.05,
-        volume24hUsd: 1000000,
-        liquidityDepthIndex: 90,
-        sessionStatus: 'OVERNIGHT_ACTIVE',
-        isDemoData: false,
-        chain: 'arbitrum',
-        contractAddress: '0x222',
-        externalProvenance: {
-          sourceUrl: 'https://bopenapi.bgwapi.io/bgw-pro/market/v3/rwa/stockInfo',
-          publisherName: 'Bitget Wallet RWA / Reality Protocol',
-          retrievedAtTimestamp: new Date().toISOString(),
-          underlyingStockSymbol: 'AAPL',
-          dataSource: 'reality',
-          contentHash: 'hash-24h-2',
-          dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY',
-          raw24hChangePct: -1.96,
-        },
-      };
-
-      const pulse = evaluate24hRealityPulse(quote);
-      expect(pulse).not.toBeNull();
-      expect(pulse?.ticker).toBe('AAPL');
-      expect(pulse?.triggerType).toBe('API_24H_CHANGE');
-      expect(pulse?.direction).toBe('DOWN');
-      expect(pulse?.percentageMovePct).toBe(-1.96);
-    });
-
-    it('should REJECT 24h pulse when native change is less than 1.5%', () => {
+    it('should QUALIFY 24h candidate as EARLY_WARNING_RISK_REVIEW when native change is between 1.0% and 1.49%', () => {
       const quote: MarketContextWithRwaProvenance = {
         symbol: 'RMSFT',
         name: 'MSFT Tokenized Stock',
         currentPrice: 400.0,
-        prevClose: 396.0,
-        change24hPct: 1.01, // 1.01% < 1.5%
+        prevClose: 395.2,
+        change24hPct: 1.21, // 1.21% in [1.0%, 1.49%]
         bidPrice: 399.9,
         askPrice: 400.1,
         spreadPct: 0.05,
@@ -345,7 +310,48 @@ describe('Reality Market Pulse Detector & Snapshot Store', () => {
           dataSource: 'reality',
           contentHash: 'hash-24h-3',
           dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY',
-          raw24hChangePct: 1.01,
+          raw24hChangePct: 1.21,
+          traceId: 'trace-ew-123',
+        },
+      };
+
+      const pulse = evaluate24hRealityPulse(quote);
+      expect(pulse).not.toBeNull();
+      expect(pulse?.ticker).toBe('MSFT');
+      expect(pulse?.triggerType).toBe('API_24H_CHANGE');
+      expect(pulse?.triggerProfile).toBe('EARLY_WARNING_RISK_REVIEW');
+      expect(pulse?.percentageMovePct).toBe(1.21);
+
+      const eventItem = createPulseEventItem(pulse!);
+      expect(eventItem.source).toBe('BITGET_REALITY_EARLY_WARNING');
+      expect(eventItem.title).toContain('Reality 24H Early Warning: MSFT UP 1.21%');
+    });
+
+    it('should REJECT 24h candidate when native change is less than 1.0%', () => {
+      const quote: MarketContextWithRwaProvenance = {
+        symbol: 'RMSFT',
+        name: 'MSFT Tokenized Stock',
+        currentPrice: 400.0,
+        prevClose: 397.0,
+        change24hPct: 0.75, // 0.75% < 1.0%
+        bidPrice: 399.9,
+        askPrice: 400.1,
+        spreadPct: 0.05,
+        volume24hUsd: 1000000,
+        liquidityDepthIndex: 90,
+        sessionStatus: 'OVERNIGHT_ACTIVE',
+        isDemoData: false,
+        chain: 'morph',
+        contractAddress: '0x333',
+        externalProvenance: {
+          sourceUrl: 'https://bopenapi.bgwapi.io/bgw-pro/market/v3/rwa/stockInfo',
+          publisherName: 'Bitget Wallet RWA / Reality Protocol',
+          retrievedAtTimestamp: new Date().toISOString(),
+          underlyingStockSymbol: 'MSFT',
+          dataSource: 'reality',
+          contentHash: 'hash-24h-sub1',
+          dataMode: 'BITGET_WALLET_RWA_REALITY_READ_ONLY',
+          raw24hChangePct: 0.75,
         },
       };
 
@@ -445,6 +451,32 @@ describe('Reality Market Pulse Detector & Snapshot Store', () => {
       ];
 
       expect(hasOpenPositionForSymbol(openReceipts as DecisionReceipt[], 'TSLA')).toBe(true);
+    });
+
+    it('should detect recent decision receipt within 24-hour cooldown window', () => {
+      const recentReceipts: Partial<DecisionReceipt>[] = [
+        {
+          receiptId: 'rcpt-recent-msft',
+          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+          marketContext: {
+            symbol: 'RMSFT',
+            name: 'MSFT',
+            currentPrice: 400,
+            prevClose: 396,
+            change24hPct: 1.01,
+            bidPrice: 399,
+            askPrice: 401,
+            spreadPct: 0.05,
+            volume24hUsd: 1000,
+            liquidityDepthIndex: 90,
+            sessionStatus: 'OVERNIGHT_ACTIVE',
+            isDemoData: false,
+          },
+        },
+      ];
+
+      expect(hasRecentReceiptForSymbol(recentReceipts as DecisionReceipt[], 'MSFT', 24 * 60 * 60 * 1000)).toBe(true);
+      expect(hasRecentReceiptForSymbol(recentReceipts as DecisionReceipt[], 'NVDA', 24 * 60 * 60 * 1000)).toBe(false);
     });
   });
 
@@ -595,7 +627,7 @@ describe('Reality Market Pulse Detector & Snapshot Store', () => {
       expect(summary.max24hChange?.ticker).toBe('TSLA');
       expect(summary.max24hChange?.direction).toBe('DOWN');
       expect(summary.max24hChange?.percentageMovePct).toBe(1.18);
-      expect(summary.max24hChange?.thresholdMet).toBe(false);
+      expect(summary.max24hChange?.thresholdMet).toBe(true);
 
       expect(summary.max30mChange).toBeDefined();
       expect(summary.max30mChange?.ticker).toBe('NVDA');
@@ -604,7 +636,7 @@ describe('Reality Market Pulse Detector & Snapshot Store', () => {
 
       const text = formatRealityDiagnosticsText(summary);
       expect(text).toContain('Reality Diagnostics: 2/6 quotes sampled (2 with valid 24h change).');
-      expect(text).toContain('Max 24h: TSLA DOWN 1.18% (threshold >=1.5% NOT MET).');
+      expect(text).toContain('Max 24h: TSLA DOWN 1.18% (EARLY WARNING QUALIFIED (1.0%-1.49%)).');
       expect(text).toContain('Max 30m: NVDA UP 0.42% (threshold >=1.5% NOT MET).');
     });
 
@@ -642,7 +674,7 @@ describe('Reality Market Pulse Detector & Snapshot Store', () => {
       expect(summary.max24hChange?.thresholdMet).toBe(true);
 
       const text = formatRealityDiagnosticsText(summary);
-      expect(text).toContain('Max 24h: NVDA UP 2.13% (THRESHOLD MET (>=1.5%)).');
+      expect(text).toContain('Max 24h: NVDA UP 2.13% (HIGH CONVICTION MET (>=1.5%)).');
     });
   });
 });

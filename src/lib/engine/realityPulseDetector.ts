@@ -78,13 +78,17 @@ export function evaluateRealityPulse(
     currentTimestamp: currentQuote.externalProvenance.retrievedAtTimestamp,
     intervalMinutes: parseFloat(intervalMinutes.toFixed(1)),
     triggerType: 'SNAPSHOT_30M',
+    triggerProfile: 'HIGH_CONVICTION_PULSE',
     traceId,
   };
 }
 
 /**
  * Trigger 2: Native 24-Hour Change Ratio Pulse (API_24H_CHANGE)
- * Uses Bitget Wallet stockInfo's native price_24h_change_ratio / change24hPct. Requires >= 1.5% move.
+ * Uses Bitget Wallet stockInfo's native price_24h_change_ratio / change24hPct.
+ * - >= 1.5% qualifies as HIGH_CONVICTION_PULSE
+ * - 1.0% to 1.49% qualifies as EARLY_WARNING_RISK_REVIEW
+ * - < 1.0% does not qualify
  */
 export function evaluate24hRealityPulse(
   currentQuote: MarketContextWithRwaProvenance
@@ -112,10 +116,13 @@ export function evaluate24hRealityPulse(
   }
 
   const absPct = Math.abs(change24hPct);
-  // Requirement: Preserve 1.5% threshold
-  if (absPct < 1.5) {
+  // Below 1.0% does not qualify for early warning or pulse
+  if (absPct < 1.0) {
     return null;
   }
+
+  const triggerProfile: 'HIGH_CONVICTION_PULSE' | 'EARLY_WARNING_RISK_REVIEW' =
+    absPct >= 1.5 ? 'HIGH_CONVICTION_PULSE' : 'EARLY_WARNING_RISK_REVIEW';
 
   const direction: 'UP' | 'DOWN' = change24hPct >= 0 ? 'UP' : 'DOWN';
   const ticker = (currentQuote.externalProvenance.underlyingStockSymbol || currentQuote.symbol).toUpperCase().replace(/^R/, '');
@@ -141,6 +148,7 @@ export function evaluate24hRealityPulse(
     currentTimestamp,
     intervalMinutes: 1440,
     triggerType: 'API_24H_CHANGE',
+    triggerProfile,
     raw24hChangePct: change24hPct,
     traceId,
   };
@@ -149,16 +157,29 @@ export function evaluate24hRealityPulse(
 export function createPulseEventItem(pulse: RealityMarketPulse): EventItem {
   const absPct = Math.abs(pulse.percentageMovePct).toFixed(2);
   const is24h = pulse.triggerType === 'API_24H_CHANGE';
+  const isEarlyWarning = pulse.triggerProfile === 'EARLY_WARNING_RISK_REVIEW';
 
-  const title = is24h
-    ? `Reality 24H Market Pulse: ${pulse.ticker} ${pulse.direction} ${absPct}%`
-    : `Reality Market Pulse: ${pulse.ticker} ${pulse.direction} ${absPct}%`;
+  let title: string;
+  let source: string;
+  let snippet: string;
+  let impactScore: number;
 
-  const source = is24h ? 'BITGET_REALITY_24H_PULSE' : 'BITGET_REALITY_PULSE';
-
-  const snippet = is24h
-    ? `[Reality 24H Market Pulse] ${pulse.ticker} (${pulse.rTokenSymbol} on ${pulse.chain}) observed native 24-hour price change of ${pulse.direction} ${absPct}% (current price $${pulse.currentPrice.toFixed(2)}). Trigger: Bitget Wallet API 24H Change Ratio (API_24H_CHANGE). Verified data source: Bitget Wallet Reality Protocol. Contract: ${pulse.contract}. Trace ID: ${pulse.traceId || 'N/A'}.`
-    : `[Reality Market Pulse] ${pulse.ticker} (${pulse.rTokenSymbol} on ${pulse.chain}) observed price move ${pulse.direction} by ${absPct}% (from $${pulse.prevPrice.toFixed(2)} to $${pulse.currentPrice.toFixed(2)}) over ${pulse.intervalMinutes} minutes window (${pulse.prevTimestamp} to ${pulse.currentTimestamp}). Trigger: Snapshot 30-Minute Interval (SNAPSHOT_30M). Verified data source: Bitget Wallet Reality Protocol. Contract: ${pulse.contract}. Trace ID: ${pulse.traceId || 'N/A'}.`;
+  if (isEarlyWarning) {
+    title = `Reality 24H Early Warning: ${pulse.ticker} ${pulse.direction} ${absPct}%`;
+    source = 'BITGET_REALITY_EARLY_WARNING';
+    impactScore = pulse.direction === 'UP' ? 4.5 : -4.5;
+    snippet = `[Reality 24H Early Warning Risk Review] ${pulse.ticker} (${pulse.rTokenSymbol} on ${pulse.chain}) observed native 24-hour price change of ${pulse.direction} ${absPct}% (current price $${pulse.currentPrice.toFixed(2)}). Profile: EARLY_WARNING_RISK_REVIEW. Verified data source: Bitget Wallet Reality Protocol. Contract: ${pulse.contract}. Trace ID: ${pulse.traceId || 'N/A'}.`;
+  } else if (is24h) {
+    title = `Reality 24H Market Pulse: ${pulse.ticker} ${pulse.direction} ${absPct}%`;
+    source = 'BITGET_REALITY_24H_PULSE';
+    impactScore = pulse.direction === 'UP' ? 7.5 : -7.5;
+    snippet = `[Reality 24H Market Pulse] ${pulse.ticker} (${pulse.rTokenSymbol} on ${pulse.chain}) observed native 24-hour price change of ${pulse.direction} ${absPct}% (current price $${pulse.currentPrice.toFixed(2)}). Trigger: Bitget Wallet API 24H Change Ratio (API_24H_CHANGE). Profile: HIGH_CONVICTION_PULSE. Verified data source: Bitget Wallet Reality Protocol. Contract: ${pulse.contract}. Trace ID: ${pulse.traceId || 'N/A'}.`;
+  } else {
+    title = `Reality Market Pulse: ${pulse.ticker} ${pulse.direction} ${absPct}%`;
+    source = 'BITGET_REALITY_PULSE';
+    impactScore = pulse.direction === 'UP' ? 7.5 : -7.5;
+    snippet = `[Reality Market Pulse] ${pulse.ticker} (${pulse.rTokenSymbol} on ${pulse.chain}) observed price move ${pulse.direction} by ${absPct}% (from $${pulse.prevPrice.toFixed(2)} to $${pulse.currentPrice.toFixed(2)}) over ${pulse.intervalMinutes} minutes window (${pulse.prevTimestamp} to ${pulse.currentTimestamp}). Trigger: Snapshot 30-Minute Interval (SNAPSHOT_30M). Profile: HIGH_CONVICTION_PULSE. Verified data source: Bitget Wallet Reality Protocol. Contract: ${pulse.contract}. Trace ID: ${pulse.traceId || 'N/A'}.`;
+  }
 
   return {
     id: pulse.id,
@@ -167,7 +188,7 @@ export function createPulseEventItem(pulse: RealityMarketPulse): EventItem {
     timestamp: pulse.currentTimestamp,
     category: 'MACRO',
     affectedSymbol: pulse.ticker,
-    impactScore: pulse.direction === 'UP' ? 7.5 : -7.5,
+    impactScore,
     rawSnippet: snippet,
     isDemoData: false,
   };
@@ -214,7 +235,7 @@ export function collectRealityDiagnostics(
           ticker,
           direction: change24hPct >= 0 ? 'UP' : 'DOWN',
           percentageMovePct: parseFloat(abs24h.toFixed(2)),
-          thresholdMet: abs24h >= 1.5,
+          thresholdMet: abs24h >= 1.0,
         };
       }
     }
@@ -266,14 +287,22 @@ export function formatRealityDiagnosticsText(summary: RealityDiagnosticsSummary)
   parts.push(`Reality Diagnostics: ${summary.sampledCount}/6 quotes sampled (${summary.tickersWith24hChangeCount} with valid 24h change).`);
 
   if (summary.max24hChange) {
-    const metStr = summary.max24hChange.thresholdMet ? 'THRESHOLD MET (>=1.5%)' : 'threshold >=1.5% NOT MET';
-    parts.push(`Max 24h: ${summary.max24hChange.ticker} ${summary.max24hChange.direction} ${summary.max24hChange.percentageMovePct.toFixed(2)}% (${metStr}).`);
+    const pct = summary.max24hChange.percentageMovePct;
+    let statusLabel: string;
+    if (pct >= 1.5) {
+      statusLabel = 'HIGH CONVICTION MET (>=1.5%)';
+    } else if (pct >= 1.0) {
+      statusLabel = 'EARLY WARNING QUALIFIED (1.0%-1.49%)';
+    } else {
+      statusLabel = 'threshold >=1.0% NOT MET';
+    }
+    parts.push(`Max 24h: ${summary.max24hChange.ticker} ${summary.max24hChange.direction} ${pct.toFixed(2)}% (${statusLabel}).`);
   } else {
     parts.push(`Max 24h: None (no valid 24h change field reported).`);
   }
 
   if (summary.max30mChange) {
-    const metStr = summary.max30mChange.thresholdMet ? 'THRESHOLD MET (>=1.5%)' : 'threshold >=1.5% NOT MET';
+    const metStr = summary.max30mChange.thresholdMet ? 'HIGH CONVICTION MET (>=1.5%)' : 'threshold >=1.5% NOT MET';
     parts.push(`Max 30m: ${summary.max30mChange.ticker} ${summary.max30mChange.direction} ${summary.max30mChange.percentageMovePct.toFixed(2)}% (${metStr}).`);
   } else {
     parts.push(`Max 30m: None (snapshot interval <30m or initial baseline).`);

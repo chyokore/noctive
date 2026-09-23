@@ -3,7 +3,7 @@ import { AgentEngine } from '@/lib/engine/agentEngine';
 import { RiskEngine } from '@/lib/engine/riskEngine';
 import { PaperExchange } from '@/lib/engine/paperExchange';
 import { ReceiptGenerator } from '@/lib/engine/receiptGenerator';
-import { getLedgerStore, hasOpenPositionForSymbol } from '@/lib/store/persistentStore';
+import { getLedgerStore, hasOpenPositionForSymbol, hasRecentReceiptForSymbol } from '@/lib/store/persistentStore';
 import { LiveEventProvider } from '@/lib/adapters/liveEventProvider';
 import { BitgetWalletRwaMarketProvider, APPROVED_EQUITY_WATCHLIST, MarketContextWithRwaProvenance } from '@/lib/adapters/bitgetWalletRwaMarketProvider';
 import { createRunAuditRecord } from '@/lib/engine/runAuditGenerator';
@@ -150,8 +150,18 @@ async function handlePaperCycle(request: NextRequest) {
       mappedIssuerTicker = ticker;
       mappedRToken = candidate.pulse.rTokenSymbol;
 
+      if (candidate.quote.externalProvenance) {
+        candidate.quote.externalProvenance.triggerProfile = candidate.pulse.triggerProfile;
+      }
+
       if (hasOpenPositionForSymbol(existingReceipts, ticker)) {
         safeSkipReason = `Open paper position already exists for symbol ${ticker}; paper trade skipped per position limit guard.`;
+        console.log(`[CronPaperCycle] ${safeSkipReason}`);
+        continue;
+      }
+
+      if (hasRecentReceiptForSymbol(existingReceipts, ticker, 24 * 60 * 60 * 1000)) {
+        safeSkipReason = `Paper decision receipt already exists for symbol ${ticker} within 24-hour cooldown window; paper decision skipped per cooldown guard.`;
         console.log(`[CronPaperCycle] ${safeSkipReason}`);
         continue;
       }
