@@ -4,9 +4,9 @@ import { HeaderNav } from '@/components/HeaderNav';
 import { Footer } from '@/components/Footer';
 
 export const metadata: Metadata = {
-  title: 'Noctive | Autonomous Overnight Trading Intelligence Agent',
+  title: 'Noctive UTA Sentinel | Paper-Only Collateral Risk Intelligence',
   description:
-    'Autonomous paper-trading intelligence agent for tokenized US equities during market closures. Bitget AI Base Camp Hackathon S2.',
+    'Stress-test tokenized-equity collateral before overnight risk becomes a position problem. Paper-only UTA collateral risk intelligence for tokenized US equities.',
 };
 
 export default function RootLayout({

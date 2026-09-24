@@ -79,13 +79,13 @@ export default function ReplayLabPage() {
         <div>
           <div className="flex items-center gap-2">
             <BarChart3 className="w-6 h-6 text-teal-400" />
-            <h1 className="text-2xl font-bold text-white font-sans tracking-tight">Opening-Gap Replay Lab</h1>
+            <h1 className="text-2xl font-bold text-white font-sans tracking-tight">Noctive UTA Sentinel — Opening-Gap Replay Lab</h1>
             <span className="px-2 py-0.5 rounded bg-teal-500/10 border border-teal-500/30 text-teal-400 text-xs font-mono font-medium">
               RETROSPECTIVE ANALYSIS
             </span>
           </div>
           <p className="text-xs text-slate-400 font-mono mt-1">
-            Quantifies overnight rToken price discovery accuracy against regular US market session opening gaps.
+            Quantifies overnight tokenized-equity price discovery accuracy and collateral risk signals against regular market opening gaps.
           </p>
         </div>
 

@@ -9,10 +9,10 @@ export const Footer: React.FC = () => {
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-white font-sans font-bold text-base">
               <Cpu className="w-4 h-4 text-electric-400" />
-              <span>NOCTIVE</span>
+              <span>NOCTIVE UTA SENTINEL</span>
             </div>
             <p className="text-slate-400 text-xs">
-              Autonomous Paper-Trading Intelligence Agent for Tokenized US Equities (rTokens).
+              Stress-test tokenized-equity collateral before overnight risk becomes a position problem. Paper-only UTA collateral risk intelligence for tokenized US equities.
             </p>
           </div>
 

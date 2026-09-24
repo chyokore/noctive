@@ -79,13 +79,13 @@ export default function DemoScenariosPage() {
         <div>
           <div className="flex items-center gap-2">
             <PlayCircle className="w-6 h-6 text-amber-400" />
-            <h1 className="text-2xl font-bold text-white font-sans tracking-tight">Interactive Demo Scenarios</h1>
+            <h1 className="text-2xl font-bold text-white font-sans tracking-tight">Noctive UTA Sentinel — Interactive Demo Scenarios</h1>
             <span className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-mono font-medium flex items-center gap-1">
               <Info className="w-3 h-3 text-amber-400" /> Demo Data
             </span>
           </div>
           <p className="text-xs text-slate-400 font-mono mt-1">
-            Pre-packaged realistic scenarios testing autonomous agent decisions, liquidity noise rejection, and deterministic risk gate enforcement.
+            Pre-packaged scenarios stress-testing tokenized-equity collateral risk, Qwen synthesis, and deterministic safety gates.
           </p>
         </div>
       </div>
