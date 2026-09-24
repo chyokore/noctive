@@ -1,80 +1,142 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { INITIAL_RECEIPTS } from '@/lib/store/noctiveStore';
 import { RiskCheckMatrix } from '@/components/RiskCheckMatrix';
 import { DecisionAuthorityPanel } from '@/components/DecisionAuthorityPanel';
 import { DataProvenanceBadge } from '@/components/DataProvenanceBadge';
 import {
-  FileCheck2,
   ArrowLeft,
   ShieldCheck,
   Cpu,
   Copy,
   Check,
-  TrendingUp,
   AlertTriangle,
   FileText,
-  Clock,
-  Database,
-  Terminal,
 } from 'lucide-react';
 
 import { DecisionReceipt } from '@/types/domain';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+// React Error Boundary to prevent blank white screens if payload parsing or rendering fails
+class ReceiptErrorBoundary extends React.Component<
+  { children: React.ReactNode; receiptId: string },
+  { hasError: boolean; errorMessage: string }
+> {
+  constructor(props: { children: React.ReactNode; receiptId: string }) {
+    super(props);
+    this.state = { hasError: false, errorMessage: '' };
+  }
 
-export default function DecisionDetailPage() {
-  const params = useParams();
-  const router = useRouter();
-  const receiptId = (params.id as string) || '';
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, errorMessage: error?.message || 'Unknown render error' };
+  }
 
-  const initialSyncReceipt = INITIAL_RECEIPTS.find((r) => r.receiptId === receiptId) || null;
-  const [receipt, setReceipt] = useState<DecisionReceipt | null>(initialSyncReceipt);
-  const [isLoading, setIsLoading] = useState<boolean>(!initialSyncReceipt);
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[ReceiptErrorBoundary] Render error caught:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="py-20 text-center space-y-4 font-mono max-w-md mx-auto">
+          <div className="flex justify-center text-rose-400 mb-2">
+            <AlertTriangle className="w-10 h-10" />
+          </div>
+          <h1 className="text-xl font-bold text-white font-sans">Unable to Render Decision Receipt</h1>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            An unexpected error occurred while processing decision receipt <span className="text-electric-400 font-bold">{this.props.receiptId}</span>.
+          </p>
+          <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-500/20 text-[11px] text-rose-300 font-mono text-left overflow-x-auto">
+            {this.state.errorMessage}
+          </div>
+          <Link
+            href="/decision-ledger"
+            className="inline-flex items-center gap-1.5 text-electric-400 hover:text-electric-300 underline text-xs pt-2 font-bold"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Decision Ledger</span>
+          </Link>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function DecisionDetailContent({ receiptId }: { receiptId: string }) {
+  const [receipt, setReceipt] = useState<DecisionReceipt | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [copied, setCopied] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     let isMounted = true;
-    let attempts = 0;
-    const maxAttempts = 5;
 
-    async function loadReceiptWithRetry() {
-      if (initialSyncReceipt) {
+    async function loadReceipt() {
+      if (!receiptId) {
         if (isMounted) setIsLoading(false);
         return;
       }
 
-      while (attempts < maxAttempts && isMounted) {
-        attempts++;
+      // Check synchronous pre-seeded dataset first
+      const syncMatch = INITIAL_RECEIPTS.find((r) => r.receiptId === receiptId);
+      if (syncMatch) {
+        if (isMounted) {
+          setReceipt(syncMatch);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      // Fetch from persistent ledger API with no-store
+      try {
+        const res = await fetch('/api/ledger?demo=all', {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+        });
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.allReceipts)) {
+          const found = data.allReceipts.find((r: DecisionReceipt) => r.receiptId === receiptId);
+          if (found) {
+            if (isMounted) {
+              setReceipt(found);
+              setIsLoading(false);
+            }
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('[DecisionDetail] API fetch error:', err);
+      }
+
+      // Small 500ms single retry for database replication propagation
+      if (isMounted) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
         try {
-          const res = await fetch('/api/ledger?demo=all', {
+          const resRetry = await fetch('/api/ledger?demo=all', {
             cache: 'no-store',
             headers: {
               'Cache-Control': 'no-cache, no-store, must-revalidate',
               'Pragma': 'no-cache',
             },
           });
-          const data = await res.json();
-          if (data.success && Array.isArray(data.allReceipts)) {
-            const found = data.allReceipts.find((r: DecisionReceipt) => r.receiptId === receiptId);
-            if (found) {
+          const dataRetry = await resRetry.json();
+          if (dataRetry && dataRetry.success && Array.isArray(dataRetry.allReceipts)) {
+            const foundRetry = dataRetry.allReceipts.find((r: DecisionReceipt) => r.receiptId === receiptId);
+            if (foundRetry) {
               if (isMounted) {
-                setReceipt(found);
+                setReceipt(foundRetry);
                 setIsLoading(false);
               }
               return;
             }
           }
-        } catch (err) {
-          console.error(`[DecisionDetail] Failed to load receipt (attempt ${attempts}):`, err);
-        }
-
-        if (attempts < maxAttempts && isMounted) {
-          await new Promise((resolve) => setTimeout(resolve, 600));
+        } catch (retryErr) {
+          console.error('[DecisionDetail] API retry fetch error:', retryErr);
         }
       }
 
@@ -83,16 +145,12 @@ export default function DecisionDetailPage() {
       }
     }
 
-    if (receiptId) {
-      loadReceiptWithRetry();
-    } else {
-      if (isMounted) setIsLoading(false);
-    }
+    loadReceipt();
 
     return () => {
       isMounted = false;
     };
-  }, [receiptId, initialSyncReceipt]);
+  }, [receiptId]);
 
   const handleCopyJson = () => {
     if (!receipt) return;
@@ -143,6 +201,25 @@ export default function DecisionDetailPage() {
 
   const { event, marketContext, agentDecision, riskGate, paperOrder, status, provenance, decisionAuthority } = receipt;
 
+  // Defensive fallback if essential payload sections are missing
+  if (!event || !marketContext || !agentDecision || !riskGate) {
+    return (
+      <div className="py-20 text-center space-y-4 font-mono max-w-md mx-auto">
+        <div className="flex justify-center text-amber-400 mb-2">
+          <AlertTriangle className="w-10 h-10" />
+        </div>
+        <h1 className="text-xl font-bold text-white font-sans">Incomplete Decision Payload</h1>
+        <p className="text-xs text-slate-400 leading-relaxed">
+          Decision receipt <span className="text-electric-400 font-bold">{receipt.receiptId}</span> has missing or malformed payload attributes.
+        </p>
+        <Link href="/decision-ledger" className="inline-flex items-center gap-1.5 text-electric-400 hover:text-electric-300 underline text-xs pt-2 font-bold">
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Back to Decision Ledger</span>
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
       {/* Top Bar */}
@@ -171,7 +248,7 @@ export default function DecisionDetailPage() {
                 : status === 'RISK_BLOCKED'
                 ? 'LIVE RISK BLOCKED'
                 : 'LIVE STAND DOWN'
-              : status.replace(/_/g, ' ')}
+              : (status || '').replace(/_/g, ' ')}
           </span>
 
           <button
@@ -227,7 +304,7 @@ export default function DecisionDetailPage() {
           </div>
           <div>
             <span className="text-slate-400 block text-[10px]">Overnight Price</span>
-            <strong className="text-white">${marketContext.currentPrice.toFixed(2)}</strong>
+            <strong className="text-white">${(marketContext.currentPrice || 0).toFixed(2)}</strong>
           </div>
           <div>
             <span className="text-slate-400 block text-[10px]">Session Status</span>
@@ -258,12 +335,12 @@ export default function DecisionDetailPage() {
             </span>
             <span
               className={`px-2.5 py-1 rounded text-[11px] font-bold ${
-                event.impactScore > 0
+                (event.impactScore || 0) > 0
                   ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
                   : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
               }`}
             >
-              Category: {event.category} • Impact Score: {event.impactScore > 0 ? '+' : ''}{event.impactScore}
+              Category: {event.category} • Impact Score: {(event.impactScore || 0) > 0 ? '+' : ''}{event.impactScore}
             </span>
           </div>
 
@@ -277,8 +354,8 @@ export default function DecisionDetailPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-[11px]">
             <div className="p-2.5 rounded bg-navy-950 border border-navy-800">
               <span className="text-slate-400 block text-[10px]">Bid-Ask Spread</span>
-              <strong className={marketContext.spreadPct > 0.8 ? 'text-rose-400 font-bold' : 'text-slate-200'}>
-                {marketContext.spreadPct.toFixed(2)}%
+              <strong className={(marketContext.spreadPct || 0) > 0.8 ? 'text-rose-400 font-bold' : 'text-slate-200'}>
+                {(marketContext.spreadPct || 0).toFixed(2)}%
               </strong>
             </div>
 
@@ -289,13 +366,13 @@ export default function DecisionDetailPage() {
 
             <div className="p-2.5 rounded bg-navy-950 border border-navy-800">
               <span className="text-slate-400 block text-[10px]">24h Volume USD</span>
-              <strong className="text-slate-200">${(marketContext.volume24hUsd / 1e6).toFixed(2)}M</strong>
+              <strong className="text-slate-200">${((marketContext.volume24hUsd || 0) / 1e6).toFixed(2)}M</strong>
             </div>
 
             <div className="p-2.5 rounded bg-navy-950 border border-navy-800">
               <span className="text-slate-400 block text-[10px]">24h Price Chg</span>
-              <strong className={marketContext.change24hPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
-                {marketContext.change24hPct >= 0 ? '+' : ''}{marketContext.change24hPct}%
+              <strong className={(marketContext.change24hPct || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                {(marketContext.change24hPct || 0) >= 0 ? '+' : ''}{marketContext.change24hPct}%
               </strong>
             </div>
           </div>
@@ -312,7 +389,7 @@ export default function DecisionDetailPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
           <div className="p-3.5 rounded-xl bg-navy-950 border border-navy-800 space-y-1">
             <span className="text-slate-400 text-[10px] block uppercase">Proposed Action</span>
-            <span className="font-bold text-white text-sm uppercase">{agentDecision.action.replace(/_/g, ' ')}</span>
+            <span className="font-bold text-white text-sm uppercase">{(agentDecision.action || '').replace(/_/g, ' ')}</span>
           </div>
 
           <div className="p-3.5 rounded-xl bg-navy-950 border border-navy-800 space-y-1">
@@ -332,9 +409,9 @@ export default function DecisionDetailPage() {
 
           <h3 className="font-bold text-slate-200 pt-2">Detailed Rationale:</h3>
           <ul className="list-disc list-inside space-y-1.5 text-slate-400 font-mono text-[11px]">
-            {agentDecision.reasoning.map((step, idx) => (
+            {agentDecision.reasoning?.map((step, idx) => (
               <li key={idx}>{step}</li>
-            ))}
+            )) || <li>No detailed reasoning steps provided.</li>}
           </ul>
         </div>
       </div>
@@ -366,11 +443,11 @@ export default function DecisionDetailPage() {
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px]">Notional Value</span>
-                <strong className="text-emerald-400 text-sm">${paperOrder.notionalValueUsd.toLocaleString()}</strong>
+                <strong className="text-emerald-400 text-sm">${(paperOrder.notionalValueUsd || 0).toLocaleString()}</strong>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px]">Entry Price</span>
-                <strong className="text-white">${paperOrder.entryPrice.toFixed(2)}</strong>
+                <strong className="text-white">${(paperOrder.entryPrice || 0).toFixed(2)}</strong>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px]">Token Quantity</span>
@@ -381,11 +458,11 @@ export default function DecisionDetailPage() {
             <div className="grid grid-cols-2 gap-4 pt-2 border-t border-navy-800 text-[11px]">
               <div className="p-2.5 rounded bg-rose-950/30 border border-rose-500/20">
                 <span className="text-rose-300 block text-[10px]">Stop-Loss Bracket ({agentDecision.suggestedStopLossPct}%)</span>
-                <strong className="text-rose-400 font-bold">${paperOrder.stopLossPrice.toFixed(2)}</strong>
+                <strong className="text-rose-400 font-bold">${(paperOrder.stopLossPrice || 0).toFixed(2)}</strong>
               </div>
               <div className="p-2.5 rounded bg-emerald-950/30 border border-emerald-500/20">
                 <span className="text-emerald-300 block text-[10px]">Take-Profit Target ({agentDecision.suggestedTakeProfitPct}%)</span>
-                <strong className="text-emerald-400 font-bold">${paperOrder.takeProfitPrice.toFixed(2)}</strong>
+                <strong className="text-emerald-400 font-bold">${(paperOrder.takeProfitPrice || 0).toFixed(2)}</strong>
               </div>
             </div>
           </div>
@@ -393,7 +470,7 @@ export default function DecisionDetailPage() {
           <div className="p-5 rounded-xl bg-navy-950 border border-amber-500/30 space-y-3 font-mono text-xs">
             <div className="flex items-center gap-2 text-amber-400 font-bold border-b border-navy-800 pb-3">
               <AlertTriangle className="w-4 h-4 text-amber-400" />
-              <span>NO PAPER TRADE EXECUTED • REASON: {status.replace(/_/g, ' ')}</span>
+              <span>NO PAPER TRADE EXECUTED • REASON: {(status || '').replace(/_/g, ' ')}</span>
             </div>
 
             <div className="space-y-2 text-slate-300 font-sans text-xs">
@@ -410,5 +487,16 @@ export default function DecisionDetailPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function DecisionDetailPage() {
+  const params = useParams();
+  const receiptId = (params.id as string) || '';
+
+  return (
+    <ReceiptErrorBoundary receiptId={receiptId}>
+      <DecisionDetailContent receiptId={receiptId} />
+    </ReceiptErrorBoundary>
   );
 }
