@@ -8,6 +8,9 @@ import { INITIAL_RISK_BUDGET } from '@/lib/store/noctiveStore';
 import { MOCK_WATCHLIST } from '@/lib/adapters/marketDataProvider';
 import { PersistentStore } from '@/lib/store/persistentStore';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const agentEngine = new AgentEngine();
 const riskEngine = new RiskEngine();
 const paperExchange = new PaperExchange();
@@ -32,14 +35,21 @@ export async function POST(request: Request) {
     // Save receipt to persistent store
     await store.saveReceipt(receipt);
 
-    return NextResponse.json({
-      success: true,
-      decision,
-      risk,
-      order: decision.action !== 'STAND_DOWN' ? order : null,
-      receipt,
-      providerMode: agentEngine.getProviderMode(),
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        decision,
+        risk,
+        order: decision.action !== 'STAND_DOWN' ? order : null,
+        receipt,
+        providerMode: agentEngine.getProviderMode(),
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        },
+      }
+    );
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || 'Validation or processing error' },

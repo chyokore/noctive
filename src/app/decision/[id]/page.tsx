@@ -24,35 +24,75 @@ import {
 
 import { DecisionReceipt } from '@/types/domain';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default function DecisionDetailPage() {
   const params = useParams();
   const router = useRouter();
   const receiptId = (params.id as string) || '';
 
-  const [receipt, setReceipt] = useState<DecisionReceipt | null>(
-    INITIAL_RECEIPTS.find((r) => r.receiptId === receiptId) || null
-  );
+  const initialSyncReceipt = INITIAL_RECEIPTS.find((r) => r.receiptId === receiptId) || null;
+  const [receipt, setReceipt] = useState<DecisionReceipt | null>(initialSyncReceipt);
+  const [isLoading, setIsLoading] = useState<boolean>(!initialSyncReceipt);
   const [copied, setCopied] = useState(false);
 
   React.useEffect(() => {
-    async function loadReceipt() {
-      try {
-        const res = await fetch('/api/ledger?demo=all');
-        const data = await res.json();
-        if (data.success && Array.isArray(data.allReceipts)) {
-          const found = data.allReceipts.find((r: DecisionReceipt) => r.receiptId === receiptId);
-          if (found) {
-            setReceipt(found);
+    let isMounted = true;
+    let attempts = 0;
+    const maxAttempts = 5;
+
+    async function loadReceiptWithRetry() {
+      if (initialSyncReceipt) {
+        if (isMounted) setIsLoading(false);
+        return;
+      }
+
+      while (attempts < maxAttempts && isMounted) {
+        attempts++;
+        try {
+          const res = await fetch('/api/ledger?demo=all', {
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+            },
+          });
+          const data = await res.json();
+          if (data.success && Array.isArray(data.allReceipts)) {
+            const found = data.allReceipts.find((r: DecisionReceipt) => r.receiptId === receiptId);
+            if (found) {
+              if (isMounted) {
+                setReceipt(found);
+                setIsLoading(false);
+              }
+              return;
+            }
           }
+        } catch (err) {
+          console.error(`[DecisionDetail] Failed to load receipt (attempt ${attempts}):`, err);
         }
-      } catch (err) {
-        console.error('Failed to load receipt detail:', err);
+
+        if (attempts < maxAttempts && isMounted) {
+          await new Promise((resolve) => setTimeout(resolve, 600));
+        }
+      }
+
+      if (isMounted) {
+        setIsLoading(false);
       }
     }
+
     if (receiptId) {
-      loadReceipt();
+      loadReceiptWithRetry();
+    } else {
+      if (isMounted) setIsLoading(false);
     }
-  }, [receiptId]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [receiptId, initialSyncReceipt]);
 
   const handleCopyJson = () => {
     if (!receipt) return;
@@ -61,12 +101,41 @@ export default function DecisionDetailPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  if (isLoading) {
+    return (
+      <div className="py-24 text-center space-y-6 font-mono max-w-md mx-auto">
+        <div className="flex justify-center">
+          <div className="relative">
+            <div className="w-12 h-12 rounded-full border-2 border-electric-500/30 border-t-electric-400 animate-spin" />
+            <Cpu className="w-6 h-6 text-electric-400 absolute top-3 left-3" />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-lg font-bold text-white font-sans">
+            Verifying Immutable Decision Receipt...
+          </h2>
+          <p className="text-xs text-slate-400">
+            Retrieving cryptographic decision record <span className="text-electric-400 font-bold">{receiptId}</span> from persistent ledger store.
+          </p>
+        </div>
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-navy-900 border border-navy-800 text-[11px] text-slate-400">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Safe-Mode Ledger Audit Active</span>
+        </div>
+      </div>
+    );
+  }
+
   if (!receipt) {
     return (
-      <div className="py-20 text-center space-y-4 font-mono">
-        <h1 className="text-xl font-bold text-white">Decision Receipt Not Found</h1>
-        <Link href="/decision-ledger" className="text-electric-400 underline text-xs">
-          ← Back to Decision Ledger
+      <div className="py-20 text-center space-y-4 font-mono max-w-md mx-auto">
+        <h1 className="text-xl font-bold text-white font-sans">Decision Receipt Not Found</h1>
+        <p className="text-xs text-slate-400 leading-relaxed">
+          No decision receipt matching ID <span className="text-electric-400 font-bold">{receiptId}</span> was found in the persistent ledger store.
+        </p>
+        <Link href="/decision-ledger" className="inline-flex items-center gap-1.5 text-electric-400 hover:text-electric-300 underline text-xs pt-2 font-bold">
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Back to Decision Ledger</span>
         </Link>
       </div>
     );

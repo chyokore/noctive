@@ -220,4 +220,80 @@ describe('Deployment Readiness & Cron Security', () => {
       expect(hasOpenPositionForSymbol(mockReceipts as DecisionReceipt[], 'AAPL')).toBe(false);
     });
   });
+
+  describe('Newly Saved Receipt Persistence & Immediate Retrieval', () => {
+    it('should await saveReceipt and make newly saved live receipt immediately retrievable by receiptId', async () => {
+      delete process.env.DATABASE_URL;
+      delete process.env.VERCEL;
+
+      const store = getLedgerStore();
+      const testReceiptId = `rcpt-live-test-${Date.now()}`;
+
+      const newReceipt: DecisionReceipt = {
+        receiptId: testReceiptId,
+        timestamp: new Date().toISOString(),
+        isDemoData: false,
+        status: 'RISK_BLOCKED',
+        hash: '0x123456789abcdef',
+        event: {
+          id: 'evt-test-1',
+          title: 'Test SEC Event',
+          source: 'SEC EDGAR',
+          timestamp: new Date().toISOString(),
+          category: 'EARNINGS',
+          affectedSymbol: 'rNVDA',
+          impactScore: 5.0,
+          rawSnippet: 'Test snippet',
+          isDemoData: false,
+        },
+        marketContext: {
+          symbol: 'rNVDA',
+          name: 'NVIDIA Corp',
+          currentPrice: 130.0,
+          prevClose: 125.0,
+          change24hPct: 4.0,
+          bidPrice: 129.9,
+          askPrice: 130.1,
+          spreadPct: 0.15,
+          volume24hUsd: 10000000,
+          liquidityDepthIndex: 85,
+          sessionStatus: 'OVERNIGHT_ACTIVE',
+          isDemoData: false,
+        },
+        agentDecision: {
+          id: 'dec-test-1',
+          eventId: 'evt-test-1',
+          targetSymbol: 'rNVDA',
+          action: 'ENTER_LONG',
+          confidence: 85,
+          summary: 'Test summary',
+          reasoning: ['Test reasoning'],
+          priceDiscoveryProbability: 80,
+          calculatedPositionSizeUsd: 5000,
+          suggestedStopLossPct: 2.0,
+          suggestedTakeProfitPct: 5.0,
+          timestamp: new Date().toISOString(),
+        },
+        riskGate: {
+          isApproved: false,
+          overallStatus: 'BLOCKED',
+          rules: [],
+          blockingReasons: ['Test risk block'],
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      // 1. Save receipt and ensure promise is resolved
+      await store.saveReceipt(newReceipt);
+
+      // 2. Query receipts immediately from store
+      const allReceipts = await store.getReceipts();
+      const found = allReceipts.find((r) => r.receiptId === testReceiptId);
+
+      expect(found).toBeDefined();
+      expect(found?.receiptId).toBe(testReceiptId);
+      expect(found?.isDemoData).toBe(false);
+      expect(found?.status).toBe('RISK_BLOCKED');
+    });
+  });
 });
