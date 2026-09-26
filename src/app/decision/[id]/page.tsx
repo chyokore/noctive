@@ -383,7 +383,7 @@ function DecisionDetailContent({ receiptId }: { receiptId: string }) {
       <div className="bg-navy-900 border border-navy-800 p-6 rounded-2xl space-y-4">
         <div className="flex items-center gap-2 border-b border-navy-800 pb-3">
           <Cpu className="w-5 h-5 text-teal-400" />
-          <h2 className="font-sans font-bold text-base text-white">Stage 2: Autonomous LLM Agent Reasoning</h2>
+          <h2 className="font-sans font-bold text-base text-white">Stage 2: Qwen Risk Assessment</h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
