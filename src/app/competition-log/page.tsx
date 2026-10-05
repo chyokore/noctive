@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { DecisionReceipt, CompetitionLogMetrics, LiveRunAuditRecord } from '@/types/domain';
+import { PerformanceValidationSection } from '@/components/PerformanceValidationSection';
 import {
   Trophy,
   ShieldCheck,
@@ -139,40 +140,13 @@ export default function CompetitionLogPage() {
         </div>
       </div>
 
-      {/* Metrics Performance Cards */}
-      {metrics && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 font-mono text-xs">
-          <div className="p-4 rounded-xl bg-navy-900 border border-navy-800 space-y-1">
-            <span className="text-slate-400 text-[10px] block uppercase">Total Decisions</span>
-            <strong className="text-white text-lg font-bold">{metrics.totalDecisions}</strong>
-          </div>
-
-          <div className="p-4 rounded-xl bg-navy-900 border border-navy-800 space-y-1">
-            <span className="text-slate-400 text-[10px] block uppercase">Approved Trades</span>
-            <strong className="text-emerald-400 text-lg font-bold">{metrics.approvedCount}</strong>
-          </div>
-
-          <div className="p-4 rounded-xl bg-navy-900 border border-navy-800 space-y-1">
-            <span className="text-slate-400 text-[10px] block uppercase">Risk Blocked</span>
-            <strong className="text-rose-400 text-lg font-bold">{metrics.riskBlockedCount}</strong>
-          </div>
-
-          <div className="p-4 rounded-xl bg-navy-900 border border-navy-800 space-y-1">
-            <span className="text-slate-400 text-[10px] block uppercase">Stand Down (Noise)</span>
-            <strong className="text-amber-400 text-lg font-bold">{metrics.standDownCount}</strong>
-          </div>
-
-          <div className="p-4 rounded-xl bg-navy-900 border border-navy-800 space-y-1">
-            <span className="text-slate-400 text-[10px] block uppercase">Cumulative PnL</span>
-            <strong className="text-emerald-400 text-lg font-bold">${metrics.cumulativePnlUsd.toFixed(2)}</strong>
-          </div>
-
-          <div className="p-4 rounded-xl bg-navy-900 border border-navy-800 space-y-1">
-            <span className="text-slate-400 text-[10px] block uppercase">Max Drawdown</span>
-            <strong className="text-teal-400 text-lg font-bold">{metrics.maxDrawdownPct}%</strong>
-          </div>
-        </div>
-      )}
+      {/* Performance & Validation Section */}
+      <PerformanceValidationSection
+        receipts={receipts}
+        audits={audits}
+        metrics={metrics}
+        storageInfo={storageInfo}
+      />
 
       {/* SECTION 1: Persistent Live Verification Run Log */}
       {activeTab === 'COMPETITION' && (

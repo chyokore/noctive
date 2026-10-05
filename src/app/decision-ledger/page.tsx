@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { INITIAL_RECEIPTS } from '@/lib/store/noctiveStore';
-import { DecisionReceipt } from '@/types/domain';
+import { DecisionReceipt, LiveRunAuditRecord, CompetitionLogMetrics } from '@/types/domain';
+import { PerformanceValidationSection } from '@/components/PerformanceValidationSection';
 import {
   Database,
   Search,
@@ -21,6 +22,14 @@ import {
 
 export default function DecisionLedgerPage() {
   const [receipts, setReceipts] = useState<DecisionReceipt[]>(INITIAL_RECEIPTS);
+  const [audits, setAudits] = useState<LiveRunAuditRecord[]>([]);
+  const [metrics, setMetrics] = useState<CompetitionLogMetrics | null>(null);
+  const [storageInfo, setStorageInfo] = useState<{
+    storeType: string;
+    isPersistent: boolean;
+    description: string;
+  } | null>(null);
+  const [showValidation, setShowValidation] = useState(true);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [symbolFilter, setSymbolFilter] = useState('ALL');
@@ -33,8 +42,19 @@ export default function DecisionLedgerPage() {
       try {
         const res = await fetch('/api/ledger?demo=all');
         const data = await res.json();
-        if (data.success && Array.isArray(data.allReceipts)) {
-          setReceipts(data.allReceipts.length > 0 ? data.allReceipts : INITIAL_RECEIPTS);
+        if (data.success) {
+          if (Array.isArray(data.allReceipts)) {
+            setReceipts(data.allReceipts.length > 0 ? data.allReceipts : INITIAL_RECEIPTS);
+          }
+          if (Array.isArray(data.audits)) {
+            setAudits(data.audits);
+          }
+          if (data.metrics) {
+            setMetrics(data.metrics);
+          }
+          if (data.storageInfo) {
+            setStorageInfo(data.storageInfo);
+          }
         }
       } catch (err) {
         console.error('Failed to load ledger from API:', err);
@@ -94,6 +114,14 @@ export default function DecisionLedgerPage() {
           <Download className="w-4 h-4" /> Export Full Ledger JSON
         </button>
       </div>
+
+      {/* Performance & Validation Section */}
+      <PerformanceValidationSection
+        receipts={receipts}
+        audits={audits}
+        metrics={metrics}
+        storageInfo={storageInfo}
+      />
 
       {/* Stream Filter Bar */}
       <div className="bg-navy-900 border border-navy-800 p-4 rounded-xl space-y-4">
