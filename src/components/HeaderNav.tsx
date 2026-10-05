@@ -30,6 +30,7 @@ export const HeaderNav: React.FC = () => {
   const navItems = [
     { label: 'Overview', path: '/', icon: Activity },
     { label: 'Command Center', path: '/command-center', icon: Cpu },
+    { label: 'Market Pulse', path: '/market-pulse', icon: Radio },
     { label: 'Replay Lab', path: '/replay-lab', icon: BarChart3 },
     { label: 'Decision Ledger', path: '/decision-ledger', icon: Database },
     { label: 'Competition Log', path: '/competition-log', icon: Trophy },

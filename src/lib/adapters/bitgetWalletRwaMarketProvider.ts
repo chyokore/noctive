@@ -714,4 +714,97 @@ export class BitgetWalletRwaMarketProvider implements IMarketDataProvider {
     const watchlist = await this.getWatchlist();
     return watchlist.find((item) => item.symbol.toUpperCase() === symbol.toUpperCase()) || null;
   }
+
+  /**
+   * Queries official Bitget Wallet signed BOpenAPI Kline/Candle endpoint.
+   * Never generates or estimates candles. Returns valid candle array ONLY when
+   * verified signed Bitget Wallet response contains genuine OHLC historical candles.
+   */
+  async fetchStockKline(
+    ticker: string,
+    chain: string,
+    contract: string
+  ): Promise<{ success: boolean; candles: any[]; errorReason?: string }> {
+    if (!this.apiKey || !this.apiSecret) {
+      return {
+        success: false,
+        candles: [],
+        errorReason: 'BITGET_WALLET_API_KEY or BITGET_WALLET_API_SECRET missing',
+      };
+    }
+
+    const timestampMs = Date.now().toString();
+    const apiPath = '/bgw/open/v1/rwa/stock/kline';
+    const rawBodyStr = JSON.stringify({ ticker, chain, contract });
+
+    try {
+      const signature = buildBitgetWalletSignature(
+        apiPath,
+        rawBodyStr,
+        this.apiKey,
+        timestampMs,
+        this.apiSecret
+      );
+      const endpointUrl = `${this.baseUrl}${apiPath}`;
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+
+      const res = await fetch(endpointUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey,
+          'x-api-timestamp': timestampMs,
+          'x-api-signature': signature,
+        },
+        body: rawBodyStr,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timer);
+
+      if (!res.ok) {
+        return {
+          success: false,
+          candles: [],
+          errorReason: `HTTP_${res.status}`,
+        };
+      }
+
+      const body = await res.json();
+      const rawCandles =
+        body?.data?.klines ||
+        body?.data?.candles ||
+        body?.data?.list ||
+        (Array.isArray(body?.data) ? body.data : []);
+
+      if (Array.isArray(rawCandles) && rawCandles.length > 0) {
+        const validCandles = rawCandles.filter(
+          (c: any) =>
+            c &&
+            (c.open !== undefined || c.price !== undefined || Array.isArray(c))
+        );
+
+        if (validCandles.length > 0) {
+          return {
+            success: true,
+            candles: validCandles,
+          };
+        }
+      }
+
+      return {
+        success: false,
+        candles: [],
+        errorReason: 'No valid Reality candles returned in payload',
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        candles: [],
+        errorReason: err?.message || 'Kline fetch error',
+      };
+    }
+  }
 }
