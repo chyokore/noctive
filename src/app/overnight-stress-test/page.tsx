@@ -8,17 +8,10 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle2,
-  Lock,
-  Layers,
-  ArrowUpRight,
-  ArrowDownRight,
   Radio,
   FileText,
-  Clock,
   Sparkles,
   RefreshCw,
-  ExternalLink,
-  ChevronRight,
 } from 'lucide-react';
 import { OvernightStressTestAssessment } from '@/lib/engine/overnightStressTestEngine';
 
@@ -254,24 +247,43 @@ export default function OvernightStressTestPage() {
                   </span>
                 </div>
 
-                <div>
-                  <div className="text-xs font-mono text-slate-400 uppercase">
-                    {active.underlyingReference.symbol} Reference
+                {active.underlyingReference.isAvailable ? (
+                  <div>
+                    <div className="text-xs font-mono text-slate-400 uppercase">
+                      {active.underlyingReference.symbol} Reference
+                    </div>
+                    <div className="text-xl font-mono font-bold text-white mt-1">
+                      {active.underlyingReference.name}
+                    </div>
+                    <div className="text-xs font-mono text-slate-400 mt-1">
+                      Source: {active.underlyingReference.source}
+                    </div>
+                    {active.underlyingReference.lastClosePrice && (
+                      <div className="text-xs font-mono text-slate-300 mt-1">
+                        Last Close: ${active.underlyingReference.lastClosePrice.toFixed(2)}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-xl font-mono font-bold text-white mt-1">
-                    {active.underlyingReference.name}
+                ) : (
+                  <div>
+                    <div className="text-xs font-mono text-slate-400 uppercase">
+                      Underlying Reference
+                    </div>
+                    <div className="text-lg font-mono font-bold text-amber-400 mt-1">
+                      Underlying reference unavailable
+                    </div>
+                    <p className="text-xs font-mono text-slate-400 mt-1">
+                      No live or cached Stooq reference price available.
+                    </p>
                   </div>
-                  <div className="text-xs font-mono text-slate-400 mt-1">
-                    Source: {active.underlyingReference.source}
-                  </div>
-                </div>
+                )}
 
                 <div className="text-[11px] font-mono text-amber-300/90 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20 leading-snug">
                   {active.underlyingReference.disclaimer}
                 </div>
               </div>
 
-              {/* Card 3: Deterministic Gap Risk Status & Posture */}
+              {/* Card 3: Deterministic Movement Risk Status & Posture */}
               <div className="p-6 rounded-2xl bg-navy-900/90 border border-navy-800 flex flex-col justify-between space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-mono text-slate-400 uppercase">
@@ -283,19 +295,19 @@ export default function OvernightStressTestPage() {
                 <div className="space-y-3">
                   <div>
                     <span className="text-xs font-mono text-slate-400 uppercase block mb-1">
-                      Overnight Gap Risk
+                      Overnight Movement Risk
                     </span>
                     <span
                       className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg font-mono font-bold text-sm border ${
-                        active.gapRiskStatus === 'Elevated'
+                        active.movementRiskStatus === 'Elevated'
                           ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-[0_0_10px_rgba(244,63,94,0.2)]'
-                          : active.gapRiskStatus === 'Watch'
+                          : active.movementRiskStatus === 'Watch'
                           ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
                           : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                       }`}
                     >
                       <AlertTriangle className="w-4 h-4" />
-                      <span>{active.gapRiskStatus.toUpperCase()} GAP RISK</span>
+                      <span>{active.movementRiskStatus.toUpperCase()} MOVEMENT RISK</span>
                     </span>
                   </div>
 
@@ -333,7 +345,7 @@ export default function OvernightStressTestPage() {
                   </span>
                 </div>
                 <span className="text-xs font-mono text-slate-400">
-                  Fixed Hypothetical Model ($100,000 Portfolio)
+                  Fixed Illustrative Model ($100,000 Portfolio)
                 </span>
               </div>
 
@@ -407,7 +419,7 @@ export default function OvernightStressTestPage() {
               </div>
             </div>
 
-            {/* Stage 2: Qwen Risk Assessment */}
+            {/* Deterministic Risk Interpretation Panel */}
             <div className="p-6 rounded-2xl bg-navy-900/90 border border-electric-500/30 space-y-4">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-electric-500/20 border border-electric-500/40 flex items-center justify-center text-electric-400">
@@ -415,16 +427,16 @@ export default function OvernightStressTestPage() {
                 </div>
                 <div>
                   <h2 className="font-sans font-bold text-base text-white">
-                    Stage 2: Qwen Risk Assessment
+                    Deterministic Risk Interpretation
                   </h2>
                   <p className="text-[11px] font-mono text-slate-400">
-                    Autonomous LLM evaluation of verified overnight price discovery & collateral impact
+                    Rule-based evaluation of verified overnight rToken price discovery & collateral impact
                   </p>
                 </div>
               </div>
 
               <div className="p-4 rounded-xl bg-navy-950 border border-navy-800 font-mono text-xs text-slate-300 leading-relaxed">
-                {active.qwenRiskAssessment}
+                {active.deterministicRiskInterpretation}
               </div>
             </div>
 

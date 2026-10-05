@@ -6,7 +6,7 @@ import {
   STOCK_REFERENCE_MAPPINGS,
 } from '@/lib/adapters/stooqMarketDataProvider';
 
-export type OvernightGapRiskStatus = 'Stable' | 'Watch' | 'Elevated';
+export type OvernightMovementRiskStatus = 'Stable' | 'Watch' | 'Elevated';
 export type RecommendedPosture = 'No Action' | 'Monitor' | 'Reduce Exposure';
 
 export interface UnderlyingStockReference {
@@ -17,6 +17,7 @@ export interface UnderlyingStockReference {
   retrievedAt: string;
   referenceAgeText: string;
   disclaimer: string;
+  isAvailable: boolean;
 }
 
 export interface IllustrativeCollateralScenario {
@@ -36,12 +37,12 @@ export interface OvernightStressTestAssessment {
   rTokenSymbol: string;
   latestRTokenPrice: number;
   native24hChangePct: number;
-  gapRiskStatus: OvernightGapRiskStatus;
+  movementRiskStatus: OvernightMovementRiskStatus;
   recommendedPosture: RecommendedPosture;
   thresholdRationale: string;
   underlyingReference: UnderlyingStockReference;
   collateralScenario: IllustrativeCollateralScenario;
-  qwenRiskAssessment: string;
+  deterministicRiskInterpretation: string;
   provenance: {
     chain: string;
     contractAddress: string;
@@ -59,8 +60,8 @@ export interface OvernightStressTestAssessment {
   timestamp: string;
 }
 
-export function computeOvernightGapRiskStatus(native24hChangePct: number): {
-  gapRiskStatus: OvernightGapRiskStatus;
+export function computeOvernightMovementRiskStatus(native24hChangePct: number): {
+  movementRiskStatus: OvernightMovementRiskStatus;
   recommendedPosture: RecommendedPosture;
   thresholdRationale: string;
 } {
@@ -68,24 +69,24 @@ export function computeOvernightGapRiskStatus(native24hChangePct: number): {
 
   if (absChange >= 1.5) {
     return {
-      gapRiskStatus: 'Elevated',
+      movementRiskStatus: 'Elevated',
       recommendedPosture: 'Reduce Exposure',
-      thresholdRationale: `Native 24h absolute price change of ${absChange.toFixed(2)}% meets or exceeds the 1.50% High Conviction Pulse threshold. Overnight gap risk is elevated.`,
+      thresholdRationale: `Native 24h absolute price change of ${absChange.toFixed(2)}% meets or exceeds the 1.50% High Conviction Pulse threshold. Overnight movement risk is elevated.`,
     };
   }
 
   if (absChange >= 1.0) {
     return {
-      gapRiskStatus: 'Watch',
+      movementRiskStatus: 'Watch',
       recommendedPosture: 'Monitor',
-      thresholdRationale: `Native 24h absolute price change of ${absChange.toFixed(2)}% qualifies for Early Warning Risk Review (1.00% to 1.49%). Overnight price movement warrants active monitoring.`,
+      thresholdRationale: `Native 24h absolute price change of ${absChange.toFixed(2)}% qualifies for Early Warning Risk Review (1.00% to 1.49%). Overnight movement risk is under watch.`,
     };
   }
 
   return {
-    gapRiskStatus: 'Stable',
+    movementRiskStatus: 'Stable',
     recommendedPosture: 'No Action',
-    thresholdRationale: `Native 24h absolute price change of ${absChange.toFixed(2)}% is within normal intraday boundaries (<1.00%). Collateral ratio is stable.`,
+    thresholdRationale: `Native 24h absolute price change of ${absChange.toFixed(2)}% is within normal intraday boundaries (<1.00%). Overnight movement risk is stable.`,
   };
 }
 
@@ -114,7 +115,7 @@ export function computeIllustrativeScenario(
     liquidationWarningRatioPct,
     isLiquidationWarning,
     disclaimer:
-      'Illustrative collateral scenario — no wallet connected. Fixed hypothetical example only, not user account, not wallet data, and not investment advice.',
+      'Fixed Illustrative Model — No Wallet Connected. Fixed hypothetical example only. This is not a connected user account, not wallet data, and not an actual liquidation calculation.',
   };
 }
 
@@ -151,8 +152,8 @@ export class OvernightStressTestEngine {
 
     const latestRTokenPrice = quote.currentPrice || 0;
 
-    const { gapRiskStatus, recommendedPosture, thresholdRationale } =
-      computeOvernightGapRiskStatus(native24hChangePct);
+    const { movementRiskStatus, recommendedPosture, thresholdRationale } =
+      computeOvernightMovementRiskStatus(native24hChangePct);
 
     const collateralScenario = computeIllustrativeScenario(native24hChangePct);
 
@@ -164,68 +165,71 @@ export class OvernightStressTestEngine {
       issuerTicker: rawTicker,
     };
 
+    const hasValidStooqPrice =
+      stooqRefQuote?.currentPrice !== undefined &&
+      typeof stooqRefQuote.currentPrice === 'number' &&
+      stooqRefQuote.currentPrice > 0;
+
     const retrievedAt =
       stooqRefQuote?.retrievedAt ||
       quote.externalProvenance?.retrievedAtTimestamp ||
       new Date().toISOString();
 
-    const underlyingReference: UnderlyingStockReference = {
-      symbol: mapping.underlyingStockSymbol,
-      name: mapping.name,
-      source: 'Stooq / SEC EDGAR Reference',
-      lastClosePrice: stooqRefQuote?.currentPrice || quote.prevClose || latestRTokenPrice,
-      retrievedAt,
-      referenceAgeText: calculateReferenceAgeText(retrievedAt),
-      disclaimer:
-        'Underlying reference only. Reference price from traditional exchange data (Stooq / SEC EDGAR). Never interpreted or substituted as an rToken price.',
-    };
+    const underlyingReference: UnderlyingStockReference = hasValidStooqPrice
+      ? {
+          symbol: mapping.underlyingStockSymbol,
+          name: mapping.name,
+          source: 'Stooq underlying-stock reference',
+          lastClosePrice: stooqRefQuote!.currentPrice,
+          retrievedAt,
+          referenceAgeText: calculateReferenceAgeText(retrievedAt),
+          disclaimer:
+            'Underlying reference only. Reference price from Stooq underlying-stock data. Never interpreted or substituted as an rToken price.',
+          isAvailable: true,
+        }
+      : {
+          symbol: mapping.underlyingStockSymbol,
+          name: 'Underlying reference unavailable',
+          source: 'Underlying reference unavailable',
+          lastClosePrice: undefined,
+          retrievedAt,
+          referenceAgeText: 'Unavailable',
+          disclaimer:
+            'Underlying reference unavailable. No live or cached Stooq reference price available. Do not infer underlying price.',
+          isAvailable: false,
+        };
 
     const chain = quote.externalProvenance?.chain || quote.chain || 'ethereum';
     const contractAddress =
       quote.externalProvenance?.contractAddress || quote.contractAddress || '0x...';
 
-    // Qwen Risk Assessment synthesis
-    let qwenRiskAssessment = '';
-    if (gapRiskStatus === 'Elevated') {
-      qwenRiskAssessment = `Qwen Risk Assessment: Verified native 24h move of ${
-        native24hChangePct >= 0 ? '+' : ''
-      }${native24hChangePct.toFixed(2)}% for ${rTokenSymbol} on ${chain} (${contractAddress.slice(
-        0,
-        6
-      )}...${contractAddress.slice(
-        -4
-      )}) exceeds the 1.50% high-conviction pulse threshold while US equity markets are closed. Potential overnight gap risk detected on underlying collateral ratio. Recommended posture: Reduce Exposure to prevent overnight liquidation cascade.`;
-    } else if (gapRiskStatus === 'Watch') {
-      qwenRiskAssessment = `Qwen Risk Assessment: Verified native 24h move of ${
-        native24hChangePct >= 0 ? '+' : ''
-      }${native24hChangePct.toFixed(2)}% for ${rTokenSymbol} on ${chain} (${contractAddress.slice(
-        0,
-        6
-      )}...${contractAddress.slice(
-        -4
-      )}) triggers Early Warning Risk Review (>=1.00% and <1.50%). Overnight price discovery indicates minor collateral variance. Recommended posture: Monitor overnight news wire and order book depth.`;
-    } else {
-      qwenRiskAssessment = `Qwen Risk Assessment: Verified native 24h move of ${
-        native24hChangePct >= 0 ? '+' : ''
-      }${native24hChangePct.toFixed(2)}% for ${rTokenSymbol} on ${chain} (${contractAddress.slice(
-        0,
-        6
-      )}...${contractAddress.slice(
-        -4
-      )}) is within normal intraday boundaries (<1.00%). Collateral ratio remains stable with zero overnight gap risk. Recommended posture: No Action required.`;
-    }
+    // Rule-Based Deterministic Risk Interpretation
+    const deterministicRiskInterpretation = `Deterministic Risk Interpretation (Rule-Based): Verified native 24h move of ${
+      native24hChangePct >= 0 ? '+' : ''
+    }${native24hChangePct.toFixed(2)}% for ${rTokenSymbol} on ${chain} (${contractAddress.slice(
+      0,
+      6
+    )}...${contractAddress.slice(
+      -4
+    )}) ${
+      movementRiskStatus === 'Elevated'
+        ? 'meets or exceeds the 1.50% High Conviction threshold while US equity markets are closed. Rule-based evaluation flags elevated overnight movement risk.'
+        : movementRiskStatus === 'Watch'
+        ? 'triggers Early Warning Risk Review (>=1.00% and <1.50%). Rule-based evaluation indicates minor collateral variance.'
+        : 'is within normal intraday boundaries (<1.00%). Rule-based evaluation confirms stable collateral posture.'
+    } Recommended posture: ${recommendedPosture}.`;
 
     return {
       ticker: rawTicker,
       rTokenSymbol,
       latestRTokenPrice,
       native24hChangePct,
-      gapRiskStatus,
+      movementRiskStatus,
       recommendedPosture,
       thresholdRationale,
       underlyingReference,
       collateralScenario,
-      qwenRiskAssessment,
+      deterministicRiskInterpretation,
       provenance: {
         chain,
         contractAddress,
@@ -240,7 +244,7 @@ export class OvernightStressTestEngine {
       labels: {
         verifiedInput: 'Verified Reality market input',
         underlyingRef: 'Underlying reference only',
-        illustrativeScenario: 'Illustrative collateral scenario — no wallet connected',
+        illustrativeScenario: 'Fixed Illustrative Model — No Wallet Connected',
         notTradeSignal: 'Not a trade signal',
       },
       timestamp: new Date().toISOString(),
