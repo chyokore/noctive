@@ -8,21 +8,22 @@ Overnight collateral-risk intelligence for tokenized US equities.
 
 ## Review in 90 Seconds
 
-Reviewers and judges can verify Noctive's live evidence, risk boundaries, and proof receipts in under 90 seconds on the public [Noctive Evaluator Pack](/evaluator).
+Reviewers and judges can verify Noctive's live evidence, risk boundaries, and proof receipts in under 90 seconds on the public [Noctive Evaluator Pack](https://noctive.vercel.app/evaluator).
 
 ### Key Pages & Links
-- **Evaluator Pack**: [/evaluator](/evaluator)
-- **Market Pulse**: [/market-pulse](/market-pulse)
-- **Overnight Stress Test**: [/overnight-stress-test](/overnight-stress-test)
-- **Decision Ledger**: [/decision-ledger](/decision-ledger)
-- **Competition Log**: [/competition-log](/competition-log)
+- **Live App**: [https://noctive.vercel.app/](https://noctive.vercel.app/)
+- **Evaluator Pack**: [https://noctive.vercel.app/evaluator](https://noctive.vercel.app/evaluator)
+- **Market Pulse**: [https://noctive.vercel.app/market-pulse](https://noctive.vercel.app/market-pulse)
+- **Overnight Stress Test**: [https://noctive.vercel.app/overnight-stress-test](https://noctive.vercel.app/overnight-stress-test)
+- **Decision Ledger**: [https://noctive.vercel.app/decision-ledger](https://noctive.vercel.app/decision-ledger)
+- **Competition Log**: [https://noctive.vercel.app/competition-log](https://noctive.vercel.app/competition-log)
 - **GitHub Repository**: [github.com/chyokore/noctive](https://github.com/chyokore/noctive)
 
 ---
 
 ## The Problem
 
-Traditional US stock exchanges close overnight and on weekends. However, tokenized US equities (rTokens) continue price discovery 24/7. When major regulatory filings, earnings updates, or thin-market price shifts occur while traditional markets are closed, collateral values can change rapidly. Noctive identifies and surfaces verified overnight rToken movement risk before traditional equity markets reopen.
+Traditional US stock exchanges close outside regular US equity-market hours and on weekends. However, tokenized US equities (rTokens) continue price discovery 24/7. When major regulatory filings, earnings updates, or thin-market price shifts occur while traditional markets are closed, collateral values can change rapidly. Noctive identifies and surfaces verified overnight rToken movement risk before traditional equity markets reopen.
 
 ---
 
@@ -71,7 +72,7 @@ flowchart LR
 
 Noctive's repository is backed by automated unit tests, static production builds, and persistent audit logging (`LocalFileLedgerStore` / `DatabaseLedgerStore`).
 
-For live decision counts, simulated PnL, win rate, and real-time execution audits, visit the live [Evaluator Pack](/evaluator).
+For live decision counts, simulated PnL, win rate, and real-time execution audits, visit the live [Evaluator Pack](https://noctive.vercel.app/evaluator).
 
 To verify the codebase locally:
 
