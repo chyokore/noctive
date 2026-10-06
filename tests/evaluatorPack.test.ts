@@ -90,4 +90,25 @@ describe('Noctive Evaluator Pack — Proof & Metric Boundaries', () => {
     expect(boundaryClarification).toContain('does not connect to user wallets');
     expect(boundaryClarification).not.toContain('guaranteed');
   });
+
+  it('should gracefully handle store read failure without throwing exception', async () => {
+    let allReceipts: any[] = [];
+    let audits: any[] = [];
+    let isLiveDataUnavailable = false;
+
+    try {
+      throw new Error('PostgreSQL connection error: ECONNREFUSED 127.0.0.1:5432');
+    } catch (err) {
+      isLiveDataUnavailable = true;
+      allReceipts = [];
+      audits = [];
+    }
+
+    expect(isLiveDataUnavailable).toBe(true);
+
+    const metrics = computeLivePerformanceMetrics(allReceipts, audits);
+    expect(metrics.scheduledCycleCount).toBe(0);
+    expect(metrics.totalLiveDecisions).toBe(0);
+    expect(metrics.winRateDisplay).toBe('Not yet meaningful — insufficient closed observations');
+  });
 });

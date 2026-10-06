@@ -21,22 +21,27 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function EvaluatorPackPage() {
-  const store = new PersistentStore();
   let allReceipts: any[] = [];
   let audits: any[] = [];
   let storageInfo: any = null;
+  let isLiveDataUnavailable = false;
 
   try {
-    allReceipts = await store.getReceipts();
-    audits = await store.getRunAudits();
+    const store = new PersistentStore();
+    allReceipts = (await store.getReceipts()) || [];
+    audits = (await store.getRunAudits()) || [];
     storageInfo = getLedgerStoreInfo();
   } catch (err) {
     console.error('[EvaluatorPackPage] Server-side store read error:', err);
+    isLiveDataUnavailable = true;
+    allReceipts = [];
+    audits = [];
+    storageInfo = null;
   }
 
-  const liveReceipts = allReceipts.filter((r) => !r.isDemoData);
+  const liveReceipts = Array.isArray(allReceipts) ? allReceipts.filter((r) => r && !r.isDemoData) : [];
   const newestLiveReceipt = [...liveReceipts].sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    (a, b) => new Date(b?.timestamp || 0).getTime() - new Date(a?.timestamp || 0).getTime()
   )[0];
 
   const newestReceiptId = newestLiveReceipt?.receiptId || (newestLiveReceipt as any)?.id;
@@ -46,7 +51,14 @@ export default async function EvaluatorPackPage() {
     newestLiveReceipt?.agentDecision?.targetSymbol ||
     'rToken';
 
-  const computedMetrics = computeLivePerformanceMetrics(allReceipts, audits);
+  let computedMetrics;
+  try {
+    computedMetrics = computeLivePerformanceMetrics(allReceipts, audits);
+  } catch (err) {
+    console.error('[EvaluatorPackPage] Metric computation error:', err);
+    isLiveDataUnavailable = true;
+    computedMetrics = computeLivePerformanceMetrics([], []);
+  }
 
   return (
     <div className="space-y-10">
@@ -252,6 +264,12 @@ export default async function EvaluatorPackPage() {
 
       {/* 5. Live Evidence Snapshot */}
       <div className="space-y-4">
+        {isLiveDataUnavailable && (
+          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono font-semibold flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>Live evidence is temporarily unavailable. Verification links remain available.</span>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Activity className="w-5 h-5 text-electric-400" />
