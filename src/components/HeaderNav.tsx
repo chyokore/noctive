@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { SafeModeBadge } from './SafeModeBadge';
-import { Activity, ShieldAlert, Cpu, Database, PlayCircle, BarChart3, Radio, Trophy, Sparkles, Zap } from 'lucide-react';
+import { Activity, ShieldAlert, ShieldCheck, Cpu, Database, PlayCircle, BarChart3, Radio, Trophy, Sparkles, Zap } from 'lucide-react';
 
 export const HeaderNav: React.FC = () => {
   const pathname = usePathname();
@@ -29,6 +29,7 @@ export const HeaderNav: React.FC = () => {
 
   const navItems = [
     { label: 'Overview', path: '/', icon: Activity },
+    { label: 'Evaluator Pack', path: '/evaluator', icon: ShieldCheck },
     { label: 'Command Center', path: '/command-center', icon: Cpu },
     { label: 'Overnight Stress', path: '/overnight-stress-test', icon: Zap },
     { label: 'Market Pulse', path: '/market-pulse', icon: Radio },
