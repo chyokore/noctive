@@ -1,59 +1,40 @@
-'use client';
-
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Link from 'next/link';
-import { DecisionReceipt, LiveRunAuditRecord } from '@/types/domain';
+import { PersistentStore, getLedgerStoreInfo } from '@/lib/store/persistentStore';
 import { computeLivePerformanceMetrics } from '@/components/PerformanceValidationSection';
+import { ExportAuditJsonButton } from '@/components/ExportAuditJsonButton';
 import {
-  Award,
-  ShieldCheck,
-  ArrowRight,
-  Activity,
-  CheckCircle2,
   Clock,
-  Download,
-  ExternalLink,
-  Cpu,
-  Zap,
+  ArrowRight,
   Radio,
-  BarChart3,
+  Zap,
   Database,
   Trophy,
-  PlayCircle,
-  ShieldAlert,
-  Info,
   Layers,
   FileCheck2,
-  FileText,
+  Activity,
+  ShieldAlert,
+  ExternalLink,
 } from 'lucide-react';
 
-export default function EvaluatorPackPage() {
-  const [receipts, setReceipts] = useState<DecisionReceipt[]>([]);
-  const [audits, setAudits] = useState<LiveRunAuditRecord[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [storageInfo, setStorageInfo] = useState<any>(null);
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-  useEffect(() => {
-    async function loadEvaluatorData() {
-      try {
-        setLoading(true);
-        const res = await fetch('/api/ledger?demo=false');
-        const data = await res.json();
-        if (data.success) {
-          setReceipts(data.receipts || []);
-          setAudits(data.audits || []);
-          setStorageInfo(data.storageInfo || null);
-        }
-      } catch (err) {
-        console.error('Failed to load evaluator pack data:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadEvaluatorData();
-  }, []);
+export default async function EvaluatorPackPage() {
+  const store = new PersistentStore();
+  let allReceipts: any[] = [];
+  let audits: any[] = [];
+  let storageInfo: any = null;
 
-  const liveReceipts = receipts.filter((r) => !r.isDemoData);
+  try {
+    allReceipts = await store.getReceipts();
+    audits = await store.getRunAudits();
+    storageInfo = getLedgerStoreInfo();
+  } catch (err) {
+    console.error('[EvaluatorPackPage] Server-side store read error:', err);
+  }
+
+  const liveReceipts = allReceipts.filter((r) => !r.isDemoData);
   const newestLiveReceipt = [...liveReceipts].sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   )[0];
@@ -65,26 +46,7 @@ export default function EvaluatorPackPage() {
     newestLiveReceipt?.agentDecision?.targetSymbol ||
     'rToken';
 
-  const computedMetrics = computeLivePerformanceMetrics(receipts, audits);
-
-  const handleExportJson = () => {
-    const exportData = {
-      exportTimestamp: new Date().toISOString(),
-      environment: 'Bitget AI Base Camp S2 — Event-Driven Agent',
-      mode: 'PAPER_ONLY_NO_LIVE_ORDERS',
-      receipts: liveReceipts,
-      audits: audits.filter((a) => !(a as any).isDemoData),
-      storageInfo,
-    };
-    const dataStr =
-      'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `noctive-evaluator-pack-audit-${Date.now()}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-  };
+  const computedMetrics = computeLivePerformanceMetrics(allReceipts, audits);
 
   return (
     <div className="space-y-10">
@@ -470,26 +432,11 @@ export default function EvaluatorPackPage() {
             </div>
           </Link>
 
-          <button
-            onClick={handleExportJson}
-            className="p-5 rounded-2xl bg-navy-900 border border-navy-800 hover:border-electric-500/50 hover:bg-navy-850/80 transition-all flex flex-col justify-between text-left space-y-3 group"
-          >
-            <div>
-              <span className="text-[10px] font-mono text-slate-400 uppercase block">
-                Export Evidence
-              </span>
-              <span className="text-sm font-mono font-bold text-white mt-1 block group-hover:text-electric-300">
-                Export Dated Audit JSON
-              </span>
-              <span className="text-xs text-slate-400 block mt-1">
-                Download machine-readable JSON containing all receipts & run audits.
-              </span>
-            </div>
-            <div className="inline-flex items-center gap-1.5 text-xs font-mono text-electric-400 font-bold">
-              <Download className="w-4 h-4" />
-              <span>Download Audit JSON</span>
-            </div>
-          </button>
+          <ExportAuditJsonButton
+            receipts={allReceipts}
+            audits={audits}
+            storageInfo={storageInfo}
+          />
 
           <a
             href="https://github.com/chyokore/noctive"
