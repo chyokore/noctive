@@ -288,23 +288,28 @@ export default function MarketPulsePage() {
             </div>
           </div>
         ) : (
-          /* Mandatory Fallback Container when Kline data is unavailable */
-          <div className="p-8 rounded-xl bg-navy-950 border border-navy-800/80 text-center space-y-3 font-mono">
-            <div className="flex justify-center text-amber-400">
-              <Info className="w-8 h-8 text-amber-400" />
-            </div>
-            <h3 className="text-sm font-bold text-slate-200">
-              Verified historical Reality candles are currently unavailable.
-            </h3>
-            <p className="text-xs text-slate-400 max-w-lg mx-auto font-sans leading-relaxed">
-              No synthetic, estimated, or interpolated candles are generated. Price-performance cards above remain fully active with live verified Bitget Wallet Reality context.
-            </p>
-            <div className="pt-2 flex flex-wrap justify-center items-center gap-2 text-[10px]">
-              <span className="px-2.5 py-1 rounded bg-navy-900 border border-navy-800 text-slate-400">
-                Read-only live market context
+          /* Mandatory Compact Fallback Card when Kline data is unavailable */
+          <div className="p-6 rounded-xl bg-navy-950 border border-navy-800 space-y-4 font-mono">
+            <div className="flex items-center justify-between border-b border-navy-800/80 pb-3">
+              <div className="flex items-center gap-2">
+                <Info className="w-4 h-4 text-amber-400" />
+                <span className="text-sm font-bold text-white font-sans">
+                  Historical Reality Candles
+                </span>
+              </div>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                Unavailable
               </span>
-              <span className="px-2.5 py-1 rounded bg-navy-900 border border-navy-800 text-slate-400">
-                Not a trade signal
+            </div>
+
+            <p className="text-xs text-slate-300 font-sans leading-relaxed">
+              Verified historical Reality candles are currently unavailable from the official Bitget Wallet RWA Kline endpoint.
+            </p>
+
+            <div className="text-[11px] text-slate-400 font-mono border-t border-navy-800/80 pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span>Live quote cards remain available and are displayed separately.</span>
+              <span className="text-[10px] text-slate-500 truncate" title="Checked: /bgw-pro/market/v3/rwa/kline">
+                Endpoint: /bgw-pro/market/v3/rwa/kline | Checked: {new Date().toLocaleTimeString('en-US', { hour12: false })} | Status: No valid candle payload returned
               </span>
             </div>
           </div>

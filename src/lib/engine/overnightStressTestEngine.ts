@@ -189,13 +189,13 @@ export class OvernightStressTestEngine {
         }
       : {
           symbol: mapping.underlyingStockSymbol,
-          name: 'Underlying reference unavailable',
-          source: 'Underlying reference unavailable',
+          name: 'No verified underlying reference',
+          source: 'Stooq underlying-stock reference',
           lastClosePrice: undefined,
           retrievedAt,
           referenceAgeText: 'Unavailable',
           disclaimer:
-            'Underlying reference unavailable. No live or cached Stooq reference price available. Do not infer underlying price.',
+            'A current or cached Stooq underlying-stock reference was not returned for this run. No underlying price is inferred or substituted.',
           isAvailable: false,
         };
 

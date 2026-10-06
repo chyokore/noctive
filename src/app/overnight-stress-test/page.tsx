@@ -233,13 +233,15 @@ export default function OvernightStressTestPage() {
             </div>
 
             {/* Card 2: Underlying Stock Reference */}
-            <div className="p-6 rounded-2xl bg-navy-900/90 border border-navy-800 flex flex-col justify-between space-y-4">
+            <div className="p-6 rounded-2xl bg-navy-900/90 border border-navy-800 flex flex-col justify-between space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-mono font-bold text-sky-400 uppercase tracking-wider px-2 py-0.5 rounded bg-sky-500/10 border border-sky-500/20">
                   {active.labels.underlyingRef}
                 </span>
                 <span className="text-[10px] font-mono text-slate-400">
-                  {active.underlyingReference.referenceAgeText}
+                  {active.underlyingReference.isAvailable
+                    ? active.underlyingReference.referenceAgeText
+                    : 'Unavailable'}
                 </span>
               </div>
 
@@ -261,21 +263,20 @@ export default function OvernightStressTestPage() {
                   )}
                 </div>
               ) : (
-                <div>
-                  <div className="text-xs font-mono text-slate-400 uppercase">
-                    Underlying Reference
+                <div className="space-y-1">
+                  <div className="text-base font-mono font-bold text-white">
+                    No verified underlying reference
                   </div>
-                  <div className="text-lg font-mono font-bold text-amber-400 mt-1">
-                    Underlying reference unavailable
-                  </div>
-                  <p className="text-xs font-mono text-slate-400 mt-1">
-                    No live or cached Stooq reference price available.
+                  <p className="text-xs font-mono text-slate-400 leading-relaxed">
+                    A current or cached Stooq underlying-stock reference was not returned for this run.
                   </p>
                 </div>
               )}
 
-              <div className="text-[11px] font-mono text-amber-300/90 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20 leading-snug">
-                {active.underlyingReference.disclaimer}
+              <div className="text-[11px] font-mono text-slate-400 border-t border-navy-800/80 pt-2.5">
+                {active.underlyingReference.isAvailable
+                  ? active.underlyingReference.disclaimer
+                  : 'No underlying price is inferred or substituted.'}
               </div>
             </div>
 

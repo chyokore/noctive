@@ -145,8 +145,9 @@ describe('Overnight Collateral Stress Test — Truthfulness & Provenance Boundar
     // No stooqQuote passed
     const assessment = OvernightStressTestEngine.evaluateQuote(mockQuote);
 
-    expect(assessment.underlyingReference.name).toBe('Underlying reference unavailable');
-    expect(assessment.underlyingReference.source).toBe('Underlying reference unavailable');
+    expect(assessment.underlyingReference.name).toBe('No verified underlying reference');
+    expect(assessment.underlyingReference.source).toBe('Stooq underlying-stock reference');
+    expect(assessment.underlyingReference.disclaimer).toContain('No underlying price is inferred or substituted');
     expect(assessment.underlyingReference.lastClosePrice).toBeUndefined();
     expect(assessment.underlyingReference.isAvailable).toBe(false);
   });
