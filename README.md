@@ -51,11 +51,14 @@ Noctive is designed explicitly as a risk-intelligence and paper-decision system.
 ## 5. How the Event-Driven Agent Works
 
 ```mermaid
-flowchart TD
-    A["Verified Bitget Wallet Reality quote or SEC EDGAR event"] --> B["Qwen risk assessment for genuine live candidates"]
-    B --> C["Independent deterministic 8-gate risk engine"]
-    C --> D["Approved paper trade, risk-blocked result, or stand-down"]
-    D --> E["Persistent decision receipt and run audit"]
+flowchart TB
+    A[Verified Reality quote or SEC filing] --> B[Qwen risk assessment]
+    B --> C[Independent eight gate risk review]
+    C --> D{Paper decision}
+    D --> E[Approved paper trade]
+    D --> F[Risk blocked or stand down]
+    E --> G[Persistent decision receipt and run audit]
+    F --> G
 ```
 
 ### Execution Stage Breakdown
