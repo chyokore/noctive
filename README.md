@@ -15,12 +15,12 @@ Tokenized US equities (rTokens) trade 24/7. When earnings announcements, regulat
 
 ## 2. Submission Summary
 
-- **Live App**: [https://noctive.vercel.app/](https://noctive.vercel.app/)
-- **Evaluator Pack**: [https://noctive.vercel.app/evaluator](https://noctive.vercel.app/evaluator)
-- **Market Pulse**: [https://noctive.vercel.app/market-pulse](https://noctive.vercel.app/market-pulse)
-- **Overnight Stress Test**: [https://noctive.vercel.app/overnight-stress-test](https://noctive.vercel.app/overnight-stress-test)
-- **Decision Ledger**: [https://noctive.vercel.app/decision-ledger](https://noctive.vercel.app/decision-ledger)
-- **Competition Log**: [https://noctive.vercel.app/competition-log](https://noctive.vercel.app/competition-log)
+- **Live App**: [https://noctive-phi.vercel.app/](https://noctive-phi.vercel.app/)
+- **Evaluator Pack**: [https://noctive-phi.vercel.app/evaluator](https://noctive-phi.vercel.app/evaluator)
+- **Market Pulse**: [https://noctive-phi.vercel.app/market-pulse](https://noctive-phi.vercel.app/market-pulse)
+- **Overnight Stress Test**: [https://noctive-phi.vercel.app/overnight-stress-test](https://noctive-phi.vercel.app/overnight-stress-test)
+- **Decision Ledger**: [https://noctive-phi.vercel.app/decision-ledger](https://noctive-phi.vercel.app/decision-ledger)
+- **Competition Log**: [https://noctive-phi.vercel.app/competition-log](https://noctive-phi.vercel.app/competition-log)
 - **GitHub Repository**: [https://github.com/chyokore/noctive](https://github.com/chyokore/noctive)
 
 ---
@@ -29,11 +29,11 @@ Tokenized US equities (rTokens) trade 24/7. When earnings announcements, regulat
 
 Reviewers and judges can verify Noctive in 90 seconds using this step-by-step route:
 
-1. **Start with the Evaluator Pack**: Open [https://noctive.vercel.app/evaluator](https://noctive.vercel.app/evaluator) to inspect the 90-second proof summary, component matrix, and dynamic live evidence snapshot.
-2. **Inspect Market Pulse**: Visit [https://noctive.vercel.app/market-pulse](https://noctive.vercel.app/market-pulse) to review verified Bitget Wallet Reality quotes, 24-hour native percentage changes, and authentic Kline candle availability.
-3. **Inspect Overnight Stress Interpretation**: Visit [https://noctive.vercel.app/overnight-stress-test](https://noctive.vercel.app/overnight-stress-test) to examine deterministic movement-risk classifications (Stable, Watch, Elevated) and fixed illustrative collateral scenarios.
-4. **Open a Live Decision Receipt**: Access [https://noctive.vercel.app/decision-ledger](https://noctive.vercel.app/decision-ledger) and click any receipt to inspect Qwen risk reasoning, active market context, and deterministic risk gate results.
-5. **Confirm Competition Run History**: Open [https://noctive.vercel.app/competition-log](https://noctive.vercel.app/competition-log) to verify persistent scheduled run audits, timestamped cycle evidence, and storage layer metadata.
+1. **Start with the Evaluator Pack**: Open [https://noctive-phi.vercel.app/evaluator](https://noctive-phi.vercel.app/evaluator) to inspect the 90-second proof summary, component matrix, and dynamic live evidence snapshot.
+2. **Inspect Market Pulse**: Visit [https://noctive-phi.vercel.app/market-pulse](https://noctive-phi.vercel.app/market-pulse) to review verified Bitget Wallet Reality quotes, 24-hour native percentage changes, and authentic Kline candle availability.
+3. **Inspect Overnight Stress Interpretation**: Visit [https://noctive-phi.vercel.app/overnight-stress-test](https://noctive-phi.vercel.app/overnight-stress-test) to examine deterministic movement-risk classifications (Stable, Watch, Elevated) and fixed illustrative collateral scenarios.
+4. **Open a Live Decision Receipt**: Access [https://noctive-phi.vercel.app/decision-ledger](https://noctive-phi.vercel.app/decision-ledger) and click any receipt to inspect Qwen risk reasoning, active market context, and deterministic risk gate results.
+5. **Confirm Competition Run History**: Open [https://noctive-phi.vercel.app/competition-log](https://noctive-phi.vercel.app/competition-log) to verify persistent scheduled run audits, timestamped cycle evidence, and storage layer metadata.
 
 ---
 
@@ -96,7 +96,7 @@ flowchart TB
 
 ## 8. Current Evidence & Honest Metrics
 
-Current live evidence, decision receipts, and performance metrics are updated dynamically from persistent storage on the [Noctive Evaluator Pack](https://noctive.vercel.app/evaluator).
+Current live evidence, decision receipts, and performance metrics are updated dynamically from persistent storage on the [Noctive Evaluator Pack](https://noctive-phi.vercel.app/evaluator).
 
 To maintain strict truthfulness:
 - Performance statistics (win rate, Sharpe ratio) are computed only when the persistent ledger contains sufficient closed trade observations.
@@ -161,10 +161,10 @@ npm run build
 
 ## 14. Final Submission Links
 
-- **Live Application**: [https://noctive.vercel.app/](https://noctive.vercel.app/)
-- **Evaluator Pack**: [https://noctive.vercel.app/evaluator](https://noctive.vercel.app/evaluator)
-- **Market Pulse**: [https://noctive.vercel.app/market-pulse](https://noctive.vercel.app/market-pulse)
-- **Overnight Stress Test**: [https://noctive.vercel.app/overnight-stress-test](https://noctive.vercel.app/overnight-stress-test)
-- **Decision Ledger**: [https://noctive.vercel.app/decision-ledger](https://noctive.vercel.app/decision-ledger)
-- **Competition Log**: [https://noctive.vercel.app/competition-log](https://noctive.vercel.app/competition-log)
+- **Live Application**: [https://noctive-phi.vercel.app/](https://noctive-phi.vercel.app/)
+- **Evaluator Pack**: [https://noctive-phi.vercel.app/evaluator](https://noctive-phi.vercel.app/evaluator)
+- **Market Pulse**: [https://noctive-phi.vercel.app/market-pulse](https://noctive-phi.vercel.app/market-pulse)
+- **Overnight Stress Test**: [https://noctive-phi.vercel.app/overnight-stress-test](https://noctive-phi.vercel.app/overnight-stress-test)
+- **Decision Ledger**: [https://noctive-phi.vercel.app/decision-ledger](https://noctive-phi.vercel.app/decision-ledger)
+- **Competition Log**: [https://noctive-phi.vercel.app/competition-log](https://noctive-phi.vercel.app/competition-log)
 - **GitHub Repository**: [https://github.com/chyokore/noctive](https://github.com/chyokore/noctive)

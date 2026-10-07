@@ -16,7 +16,7 @@ export const HeaderNav: React.FC = () => {
         const res = await fetch('/api/readiness');
         const data = await res.json();
         if (data.hasQwenKey) {
-          setReadinessMode('Live Qwen / Demo Market Data');
+          setReadinessMode('Live Qwen / Verified Bitget Reality Data');
         } else {
           setReadinessMode('Mock LLM Demo');
         }
